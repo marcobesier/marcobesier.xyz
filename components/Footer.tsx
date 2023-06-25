@@ -22,9 +22,7 @@ export default function Footer() {
           <Link href="/">{siteMetadata.title}</Link>
         </div>
         <div className="mb-8 text-sm text-gray-500 dark:text-gray-400">
-          <Link href="https://membership.marcobesier.com">
-            Web3 Developer Academy
-          </Link>
+          <Link href="https://membership.marcobesier.com">Web3 Developer Academy</Link>
         </div>
       </div>
     </footer>
