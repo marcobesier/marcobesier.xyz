@@ -2,9 +2,9 @@
 
 /** @type {import("pliny/config").PlinyConfig } */
 const siteMetadata = {
-  title: 'marcobesier.com',
+  title: 'marcobesier.xyz',
   author: 'Marco Besier',
-  headerTitle: 'marcobesier.com',
+  headerTitle: 'marcobesier.xyz',
   description: '',
   language: 'en-us',
   theme: 'system', // system, dark or light
