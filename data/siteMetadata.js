@@ -7,7 +7,7 @@ const siteMetadata = {
   headerTitle: 'marcobesier.xyz',
   description: '',
   language: 'en-us',
-  theme: 'system', // system, dark or light
+  theme: 'dark', // system, dark or light
   siteUrl: 'https://marcobesier.xyz',
   siteRepo: 'https://github.com/marcobesier/marcobesier.xyz',
   siteLogo: '/static/images/logo-nobackground-200.png',
