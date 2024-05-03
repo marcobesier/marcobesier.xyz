@@ -1,0 +1,71 @@
+---
+title: Ethernaut - Fallback - Solution
+date: '2024-05-03'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Fallback CTF
+---
+
+# Ethernaut - Fallback - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Fallback {
+    mapping(address => uint256) public contributions;
+    address public owner;
+
+    constructor() {
+        owner = msg.sender;
+        contributions[msg.sender] = 1000 * (1 ether);
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "caller is not the owner");
+        _;
+    }
+
+    function contribute() public payable {
+        require(msg.value < 0.001 ether);
+        contributions[msg.sender] += msg.value;
+        if (contributions[msg.sender] > contributions[owner]) {
+            owner = msg.sender;
+        }
+    }
+
+    function getContribution() public view returns (uint256) {
+        return contributions[msg.sender];
+    }
+
+    function withdraw() public onlyOwner {
+        payable(owner).transfer(address(this).balance);
+    }
+
+    receive() external payable {
+        require(msg.value > 0 && contributions[msg.sender] > 0);
+        owner = msg.sender;
+    }
+}
+```
+
+## Exploit
+
+The goal of this challenge is to:
+
+1. Become the contract's owner.
+2. Reduce the contract's balance to 0.
+
+Looking at the contract, we can see that `receive()` function allows us to set ourselves as the owner.
+However, to successfully call `receive()`, we first need to make a non-zero contribution by calling `contribute()` and sending a non-zero amount (e.g., 1 wei) with that function call.
+We can achieve this in the Ethernaut console as follows:
+
+```javascript
+contract.contribute({value: 1})
+```
+
+Now that our address has made a contribution to the contract, we can call `receive()` by sending an arbitrary, non-zero ether amount (e.g., 1 wei) to the contract.
+The easiest way to do this is to simply use MetaMask.
+After that transfer, we are the new owner of the contract, which allows us to call `withdraw()` to reduce the contract's balance to zero.
