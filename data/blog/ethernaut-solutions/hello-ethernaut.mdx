@@ -1,0 +1,24 @@
+---
+title: Ethernaut - Hello Ethernaut - Solution
+date: '2024-05-03'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Hello Ethernaut CTF
+---
+
+# Ethernaut - Hello Ethernaut - Solution
+
+To complete this level, you can print the password using
+
+```javascript
+await contract.password()
+// Prints 'ethernaut0'
+```
+
+in the ethernaut console. Subsequently, you can submit the password via:
+
+```javascript
+await contract.authenticate("ethernau0")
+```
+
+Finally, simply submit your contract instance to complete the level.
