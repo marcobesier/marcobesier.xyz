@@ -52,12 +52,10 @@ This will trigger `Delegation`'s `fallback()` function since `pwn()`'s function 
 The `fallback()` function will in turn make a `delegatecall` to the `Delegate` contract's `pwn()` function since our calldata matches `pwn()`'s selector.
 Since we "delegatecalled" `pwn()`, `msg.sender` is still our externally owned account's address, making us the new owner of the `Delegate` contract.
 
-To sum up, one needs to perfor two steps to solve this level:
+To sum up, one needs to perform two steps to solve this level:
 
 1. Compute `pwn()`'s function selector. It reads `0xdd365b8b`. (Recall that the function selector is the first four bytes of the keccak256 hash of the function signature. There are several [tools](https://www.evm-function-selector.click/) available to compute it in no time.)
 2. Send the transaction explained above using the Ethernaut console via:
 ```javascript
 contract.sendTransaction({data: "0xdd365b8b"})
 ```
-
-in the Ethernaut console.
