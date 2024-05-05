@@ -1,0 +1,63 @@
+---
+title: Ethernaut - Delegation - Solution
+date: '2024-05-05'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Delegation CTF
+---
+
+# Ethernaut - Delegation - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Delegate {
+    address public owner;
+
+    constructor(address _owner) {
+        owner = _owner;
+    }
+
+    function pwn() public {
+        owner = msg.sender;
+    }
+}
+
+contract Delegation {
+    address public owner;
+    Delegate delegate;
+
+    constructor(address _delegateAddress) {
+        delegate = Delegate(_delegateAddress);
+        owner = msg.sender;
+    }
+
+    fallback() external {
+        (bool result,) = address(delegate).delegatecall(msg.data);
+        if (result) {
+            this;
+        }
+    }
+}
+```
+
+## Exploit
+
+Our goal in this level is to become the owner of the `Delegate` contract.
+To achieve this, we can send a transaction to the `Delegation` contract, specifying the `pwn()` function's selector in the calldata.
+This will trigger `Delegation`'s `fallback()` function since `pwn()`'s function selector does not correspond to any function in `Delegation`.
+The `fallback()` function will in turn make a `delegatecall` to the `Delegate` contract's `pwn()` function since our calldata matches `pwn()`'s selector.
+Since we "delegatecalled" `pwn()`, `msg.sender` is still our externally owned account's address, making us the new owner of the `Delegate` contract.
+
+To sum up, one needs to perfor two steps to solve this level:
+
+1. Compute `pwn()`'s function selector. It reads `0xdd365b8b`. (Recall that the function selector is the first four bytes of the keccak256 hash of the function signature. There are several [tools](https://www.evm-function-selector.click/) available to compute it in no time.)
+2. Send the transaction explained above using the Ethernaut console via:
+```javascript
+contract.sendTransaction({data: "0xdd365b8b"})
+```
+
+in the Ethernaut console.
