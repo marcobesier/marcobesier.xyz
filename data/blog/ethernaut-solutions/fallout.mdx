@@ -1,0 +1,65 @@
+---
+title: Ethernaut - Fallback - Solution
+date: '2024-05-05'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Fallout CTF
+---
+
+# Ethernaut - Fallout - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.6.0;
+
+import "openzeppelin-contracts-06/math/SafeMath.sol";
+
+contract Fallout {
+    using SafeMath for uint256;
+
+    mapping(address => uint256) allocations;
+    address payable public owner;
+
+    /* constructor */
+    function Fal1out() public payable {
+        owner = msg.sender;
+        allocations[owner] = msg.value;
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "caller is not the owner");
+        _;
+    }
+
+    function allocate() public payable {
+        allocations[msg.sender] = allocations[msg.sender].add(msg.value);
+    }
+
+    function sendAllocation(address payable allocator) public {
+        require(allocations[allocator] > 0);
+        allocator.transfer(allocations[allocator]);
+    }
+
+    function collectAllocations() public onlyOwner {
+        msg.sender.transfer(address(this).balance);
+    }
+
+    function allocatorBalance(address allocator) public view returns (uint256) {
+        return allocations[allocator];
+    }
+}
+```
+
+## Exploit
+
+The name of the "constructor" contains a typo: the intended name is `Fallout()` but the actual one is `Fal1out()`.
+For this reason, the contract does not actually have a constructor and `Fal1out()` is just a regular function anyone can call to claim ownership.
+Therefore, we can solve the level by entering 
+
+```javascript
+contract.Fal1out()
+```
+
+in the Ethernaut console.
