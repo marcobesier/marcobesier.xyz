@@ -1,0 +1,50 @@
+---
+title: Ethernaut - Token - Solution
+date: '2024-05-05'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Token CTF
+---
+
+# Ethernaut - Token - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.6.0;
+
+contract Token {
+    mapping(address => uint256) balances;
+    uint256 public totalSupply;
+
+    constructor(uint256 _initialSupply) public {
+        balances[msg.sender] = totalSupply = _initialSupply;
+    }
+
+    function transfer(address _to, uint256 _value) public returns (bool) {
+        require(balances[msg.sender] - _value >= 0);
+        balances[msg.sender] -= _value;
+        balances[_to] += _value;
+        return true;
+    }
+
+    function balanceOf(address _owner) public view returns (uint256 balance) {
+        return balances[_owner];
+    }
+}
+```
+
+## Exploit
+
+We start out with a token balance of 20. The goal of this level is to increase our balance even further.
+
+Recall that Solidity did not have built-in protection against arithmetic overflows/underflows prior to version 0.8.0.
+Therefore, sending 21 tokens to the another account (e.g., the zero address) will underflow our balance by 1 and result in a new balance of `type(uint256).max = 115792089237316195423570985008687907853269984665640564039457584007913129639935`.
+In other words, all we have to do is to enter 
+
+```javascript
+contract.transfer("0x0000000000000000000000000000000000000000", 21)
+```
+
+in the Ethernaut console.
