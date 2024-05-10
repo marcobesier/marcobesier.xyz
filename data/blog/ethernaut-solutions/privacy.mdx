@@ -1,0 +1,73 @@
+---
+title: Ethernaut - Privacy - Solution
+date: '2024-05-10'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Privacy CTF
+---
+
+# Ethernaut - Privacy - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Privacy {
+    bool public locked = true;
+    uint256 public ID = block.timestamp;
+    uint8 private flattening = 10;
+    uint8 private denomination = 255;
+    uint16 private awkwardness = uint16(block.timestamp);
+    bytes32[3] private data;
+
+    constructor(bytes32[3] memory _data) {
+        data = _data;
+    }
+
+    function unlock(bytes16 _key) public {
+        require(_key == bytes16(data[2]));
+        locked = false;
+    }
+
+    /*
+    A bunch of super advanced solidity algorithms...
+
+      ,*'^`*.,*'^`*.,*'^`*.,*'^`*.,*'^`*.,*'^`
+      .,*'^`*.,*'^`*.,*'^`*.,*'^`*.,*'^`*.,*'^`*.,
+      *.,*'^`*.,*'^`*.,*'^`*.,*'^`*.,*'^`*.,*'^`*.,*'^         ,---/V\
+      `*.,*'^`*.,*'^`*.,*'^`*.,*'^`*.,*'^`*.,*'^`*.,*'^`*.    ~|__(o.o)
+      ^`*.,*'^`*.,*'^`*.,*'^`*.,*'^`*.,*'^`*.,*'^`*.,*'^`*.,*'  UU  UU
+    */
+}
+```
+
+## Exploit
+
+The goal of this level is to set `locked` to `false`.
+
+A prerequisite for this level is to [understand the storage layout of smart contracts](https://medium.com/@ozorawachie/solidity-storage-layout-and-slots-a-comprehensive-guide-2cee71817ed8).
+
+Looking at the above contract, we see that the last element of the `data` array (`data[2]`) is stored in the storage slot with index 5. 
+More specifically, the storage layout looks like this:
+- Slot 0: `locked`
+- Slot 1: `ID`
+- Slot 2: `flattening`, `denomination`, and `awkwardness`
+- Slot 3: `data[0]`
+- Slot 4: `data[1]`
+- Slot 5: `data[2]`
+
+So, to get the correct `_key`, we need to read the first 34 characters (2 for the `0x` and 32 for the first 16 bytes) of the value stored in slot 5.
+
+```bash
+cast storage <your level instance> 5 --rpc-url $SEP_RPC_URL | cut -c 1-34
+# Result: 0x0f09b23d6279de8f8e7fc60d468bf0fb
+```
+
+Subsequently, we can unlock the contract via:
+
+```bash
+cast send <your level instance> "unlock(bytes16)" 0x0f09b23d6279de8f8e7fc60d468bf
+0fb --rpc-url $SEP_RPC_URL --private-key <your private key>
+```
