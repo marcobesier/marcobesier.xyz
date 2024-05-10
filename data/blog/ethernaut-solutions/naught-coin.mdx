@@ -1,6 +1,6 @@
 ---
 title: Ethernaut - Naught Coin - Solution
-date: '2023-11-26'
+date: '2024-05-10'
 tags: ['security', 'solidity', 'ctfs']
 draft: false
 summary: Solution to the Ethernaut - Naught Coin CTF
@@ -53,14 +53,23 @@ contract NaughtCoin is ERC20 {
 
 ## Exploit
 
-This challenge is conveniently solved via Remix. The goal is to transfer all tokens from the `player`'s account to another address. At first sight, this looks like an impossible thing to do because the `lockTokens` modifier prevents the `player` from executing `transfer` during the first 10 years after contract deployment.
+The goal is to transfer all tokens from our `player` account to another address. At first sight, this looks like an impossible thing to do because the `lockTokens` modifier prevents the `player` from executing `transfer` during the first 10 years after contract deployment.
 
 However, notice that the ERC-20 interface exposes _two_ functions that facilitate token transfers: `transfer` and `transferFrom`.
 
 In the above contract, `transfer` is overridden and protected by `lockTokens`. `transferFrom`, however, is _not_ overridden and, in particular, _not_ protected by the `lockTokens` modifier!
 
 Therefore, we can solve this challenge using the following steps:
+First, we use our `player` account to approve a second account we control for the entire `INITIAL_SUPPLY`.
+The quickest way to do this is through the Ethernaut console.
 
-1. Deploy the contract, setting `_player` to an address we control.
-2. Use `player`'s account to approve a second account we control for the entire `INITIAL_SUPPLY`.
-3. Call `transferFrom` from our second account, specifying `player` as the `_from` parameter and `INITIAL_SUPPLY` for the `_value` parameter. Since the only goal of the challenge is to remove all tokens from the `player`'s account, we can specify an arbitrary address for the `_to` parameter (except the `player`'s address).
+```javascript
+contract.approve("<your second account address>", "1000000000000000000000000")
+```
+
+Subsequently, we can call `transferFrom` from our second account, transferring the tokens from `player`'s account to our second account.
+The following line shows how to do this using Cast.
+
+```bash
+cast send --private-key <private key of your second account> --rpc-url $SEP_RPC_URL <your level instance> "transferFrom(address,address,uint256)" <your player address> <address of your second account> 1000000000000000000000000
+```
