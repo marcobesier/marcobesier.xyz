@@ -1,0 +1,126 @@
+---
+title: Ethernaut - Dex Two - Solution
+date: '2024-05-16'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Dex Two CTF
+---
+
+# Ethernaut - Dex Two - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "openzeppelin-contracts-08/token/ERC20/IERC20.sol";
+import "openzeppelin-contracts-08/token/ERC20/ERC20.sol";
+import "openzeppelin-contracts-08/access/Ownable.sol";
+
+contract DexTwo is Ownable {
+    address public token1;
+    address public token2;
+
+    constructor() {}
+
+    function setTokens(address _token1, address _token2) public onlyOwner {
+        token1 = _token1;
+        token2 = _token2;
+    }
+
+    function add_liquidity(address token_address, uint256 amount) public onlyOwner {
+        IERC20(token_address).transferFrom(msg.sender, address(this), amount);
+    }
+
+    function swap(address from, address to, uint256 amount) public {
+        require(IERC20(from).balanceOf(msg.sender) >= amount, "Not enough to swap");
+        uint256 swapAmount = getSwapAmount(from, to, amount);
+        IERC20(from).transferFrom(msg.sender, address(this), amount);
+        IERC20(to).approve(address(this), swapAmount);
+        IERC20(to).transferFrom(address(this), msg.sender, swapAmount);
+    }
+
+    function getSwapAmount(address from, address to, uint256 amount) public view returns (uint256) {
+        return ((amount * IERC20(to).balanceOf(address(this))) / IERC20(from).balanceOf(address(this)));
+    }
+
+    function approve(address spender, uint256 amount) public {
+        SwappableTokenTwo(token1).approve(msg.sender, spender, amount);
+        SwappableTokenTwo(token2).approve(msg.sender, spender, amount);
+    }
+
+    function balanceOf(address token, address account) public view returns (uint256) {
+        return IERC20(token).balanceOf(account);
+    }
+}
+
+contract SwappableTokenTwo is ERC20 {
+    address private _dex;
+
+    constructor(address dexInstance, string memory name, string memory symbol, uint256 initialSupply)
+        ERC20(name, symbol)
+    {
+        _mint(msg.sender, initialSupply);
+        _dex = dexInstance;
+    }
+
+    function approve(address owner, address spender, uint256 amount) public {
+        require(owner != _dex, "InvalidApprover");
+        super._approve(owner, spender, amount);
+    }
+}
+```
+
+## Exploit
+
+The goal of this challenge is to steal all `token1` and `token2` funds from the dex.
+
+The contract is exactly the same as in Dex One with the only exception that the `swap()` function is missing the following check:
+
+```solidity
+require((from == token1 && to == token2) || (from == token2 && to == token1), "Invalid tokens");
+```
+
+In other words, anyone can list their own tokens!
+
+Consequently, we can simply deploy a new ERC20 token through Remix and swap this new token for `token1` and `token2` to drain the corresponding funds from the dex.
+
+To start the attack, we deploy the following ERC20 contract:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
+contract Dex2Attacker is ERC20 {
+    constructor() ERC20("Dex2 Attacker", "D2A") {
+        _mint(msg.sender, 1 * 10 ** decimals());
+    }
+}
+```
+
+Next, our goal is to swap a specific amount of our `D2A` token for `token1` and `token2`, respectively, such that `swapAmount` equals 100.
+So, to drain `token1` from the dex, we can use the following sequence:
+
+1. Transfer 100 `D2A` to the dex (so that there is no division by 0 in `getSwapAmount()`).
+2. Approve the dex for 100 `D2A`.
+3. Swap 100 `D2A` for 100 `token1`.
+
+After this sequence, the dex has a `D2A` balance of 200. 
+So, to drain `token2` from the dex as well, we first need to compute the suitable amount of `D2A` that we need to swap in order to get 100 `token2` back.
+More specifically, we need to solve the equation
+
+```solidity
+100 == amount * 100 / 200
+```
+
+for `amount`, which tells us that we need to specify `amount=200` to get a `swapAmount` of 100.
+In other words, we need to swap 200 `D2A` to get 100 `token2` back. 
+Our remaining steps are, therefore, the following:
+
+1. Approve the dex for 200 `D2A`.
+2. Swap 200 `D2A` for 100 `token2`.
+
+This leaves the dex with a balance of 400 of our worthless `D2A` tokens and a balance of 0 for both `token1` and `token2`.
