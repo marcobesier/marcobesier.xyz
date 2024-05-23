@@ -1,0 +1,66 @@
+---
+title: Ethernaut - Recovery - Solution
+date: '2024-05-22'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Recovery CTF
+---
+
+# Ethernaut - Recovery - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Recovery {
+    //generate tokens
+    function generateToken(string memory _name, uint256 _initialSupply) public {
+        new SimpleToken(_name, msg.sender, _initialSupply);
+    }
+}
+
+contract SimpleToken {
+    string public name;
+    mapping(address => uint256) public balances;
+
+    // constructor
+    constructor(string memory _name, address _creator, uint256 _initialSupply) {
+        name = _name;
+        balances[_creator] = _initialSupply;
+    }
+
+    // collect ether in return for tokens
+    receive() external payable {
+        balances[msg.sender] = msg.value * 10;
+    }
+
+    // allow transfers of tokens
+    function transfer(address _to, uint256 _amount) public {
+        require(balances[msg.sender] >= _amount);
+        balances[msg.sender] = balances[msg.sender] - _amount;
+        balances[_to] = _amount;
+    }
+
+    // clean up after ourselves
+    function destroy(address payable _to) public {
+        selfdestruct(_to);
+    }
+}
+```
+
+## Exploit
+
+The goal of this challenge is determine the address of the `SimpleToken` contract and recover the 0.001 ETH that the contract creator sent to it. 
+
+As a first step, we search for the level instance address, i.e., the address of the `Recovery` contract, on [sepolia.etherscan.io](https://sepolia.etherscan.io).
+Looking at the _Internal Transactions_ tab, we see two _Contract Creation_ transactions.
+One of them has the level instance address as its _From_ address, telling us that it corresponds to the creation of the `SimpleToken` contract in the constructor of the `Recovery` contract.
+If we click on its _Contract Creation_ link under _To_, Etherscan will take us to the detail view of the `SimpleToken` contract.
+In particular, it will reveal the `SimpleToken`'s contract address.
+Knowing this address, we can now call the `destroy()` function, specifying an arbitrary address, e.g., our `player`, as the `_to` parameter.
+ 
+```bash
+cast send <your level instance> "destroy(address)" <your player address> --private-key <your private key> --rpc-url $SEP_RPC_URL
+```
