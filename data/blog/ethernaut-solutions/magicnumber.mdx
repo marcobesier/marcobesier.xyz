@@ -1,0 +1,92 @@
+---
+title: Ethernaut - MagicNumber - Solution
+date: '2024-05-27'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - MagicNumber CTF
+---
+
+# Ethernaut - MagicNumber - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract MagicNum {
+    address public solver;
+
+    constructor() {}
+
+    function setSolver(address _solver) public {
+        solver = _solver;
+    }
+
+    /*
+    ____________/\\\_______/\\\\\\\\\_____        
+     __________/\\\\\_____/\\\///////\\\___       
+      ________/\\\/\\\____\///______\//\\\__      
+       ______/\\\/\/\\\______________/\\\/___     
+        ____/\\\/__\/\\\___________/\\\//_____    
+         __/\\\\\\\\\\\\\\\\_____/\\\//________   
+          _\///////////\\\//____/\\\/___________  
+           ___________\/\\\_____/\\\\\\\\\\\\\\\_ 
+            ___________\///_____\///////////////__
+    */
+}
+```
+
+## Solution
+
+The goal of this challenge is to create a `solver` contract that returns 42 whenever `whatIsTheMeaningOfLife()` is called. 
+The difficulty is that the `solver`'s runtime bytecode must not be greater than 10 opcodes.
+To create such a contract, we will need to write raw bytecode directly instead of using a higher-level language compiler.
+If you're not familiar with opcodes and the inner workings of the EVM yet, I recommend working through the [Huff docs](https://docs.huff.sh/) first.
+In the following, I will assume that you already know those basics.
+
+To start, note that we _don't_ have to code a dedicated `whatIsTheMeaningOfLife()` function for our contract. 
+Instead, we can simply have our contract return 42 regardless of the function selector in the calldata.
+To do that, we use the following sequence:
+
+- `60 2a`: `PUSH1 0x2a` - Push the value 42 onto the stack.
+- `60 00`: `PUSH1 0x00` - Push the memory position 0x00 onto the stack.
+- `52`: `MSTORE` - Store the value 42 at memory position 0x00.
+- `60 20`: `PUSH1 0x20` - Push the size 32 bytes onto the stack.
+- `60 00`: `PUSH1 0x00` - Push the memory position 0x00 onto the stack.
+- `f3`: `RETURN` - Return 32 bytes from memory position 0x00.
+
+Note that the `RETURN` opcode requires the return value to be stored in memory instead of just popping it from the stack as other languages do.
+Our final runtime bytecode is, therefore, given by `602a60005260206000f3`.
+
+However, to deploy this bytecode to the blockchain, we need to construct initialization code, too!
+The purpose of the initialization code is to store the runtime bytecode into the contract's code storage.
+Here is a step-by-step breakdown of what the initialization code needs to do:
+
+- `60 0a`: `PUSH1 0x0a` - Push the length of the runtime bytecode onto the stack. The lenth of `602a60005260206000f3` is 10 bytes.
+- `60 0c`: `PUSH1 0x0c` - Push the offset where the runtime bytecode is located in the full bytecode. We will see that our final initialization code has a length of 12 bytes, which is why we push 12.
+- `60 00`: `PUSH1 0x00` - Push the offset in memory where we want to copy the runtime code.
+- `39`: `CODECOPY` - Copy the runtime code to memory.
+- `60 0a`: `PUSH1 0x0a` - Push the length of the runtime bytecode onto the stack.
+- `60 00`: `PUSH1 0x00` - Push the offset in memory to start copying from.
+- `f3`: `RETURN` - Return the runtime code as the contract's code.
+
+Note that this initialization code is indeed 12 bytes long, which is why we used `PUSH1 0x0c` in the second step.
+
+Lastly, we can combine the initialization and runtime bytecodes to get:
+
+```
+600a600c600039600a6000f3602a60005260206000f3
+```
+
+To deploy the contract via Cast, we can use:
+
+```bash
+export PRIVATE_KEY=<your private key>
+export RPC_URL=<your rpc url>
+export BYTECODE=600a600c600039600a6000f3602a60005260206000f3
+
+cast send --private-key $PRIVATE_KEY --rpc-url $RPC_URL --create $BYTECODE
+```
+
+Looking at the transaction receipt, you will see the deployed contract's address, which you can use to call `setSolver()` and complete the level.
