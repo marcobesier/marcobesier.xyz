@@ -23,7 +23,7 @@ contract Force { /*
                    */ }
 ```
 
-## Exploit
+## Solution
 
 To solve this level, we need to exploit the fact that `selfdestruct` allows to force-send ether to a contract, even if this contract does not have any payable functions.
 More precisely, we can simply deploy the following attacker contract and send an arbitrary amount of ether (e.g., 1 wei) to that attacker contract.

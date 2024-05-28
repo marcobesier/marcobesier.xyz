@@ -51,7 +51,7 @@ contract NaughtCoin is ERC20 {
 }
 ```
 
-## Exploit
+## Solution
 
 The goal is to transfer all tokens from our `player` account to another address. At first sight, this looks like an impossible thing to do because the `lockTokens` modifier prevents the `player` from executing `transfer` during the first 10 years after contract deployment.
 

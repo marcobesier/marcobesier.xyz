@@ -43,7 +43,7 @@ contract Reentrance {
 }
 ```
 
-## Exploit
+## Solution
 
 To complete this level, we need to drain all funds from the contract.
 This can be achieved by exploiting the fact that the contract's `withdraw()` function does not follow the checks-effects-interactions pattern and is, therefore, vulnerable to the well-known [reentrancy attack](https://github.com/ethereumbook/ethereumbook/blob/develop/09smart-contracts-security.asciidoc#reentrancy).
