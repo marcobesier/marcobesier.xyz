@@ -1,0 +1,445 @@
+---
+title: Ethernaut - DoubleEntryPoint - Solution
+date: '2024-05-28'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - DoubleEntryPoint CTF
+---
+
+# Ethernaut - DoubleEntryPoint - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "openzeppelin-contracts-08/access/Ownable.sol";
+import "openzeppelin-contracts-08/token/ERC20/ERC20.sol";
+
+interface DelegateERC20 {
+    function delegateTransfer(address to, uint256 value, address origSender) external returns (bool);
+}
+
+interface IDetectionBot {
+    function handleTransaction(address user, bytes calldata msgData) external;
+}
+
+interface IForta {
+    function setDetectionBot(address detectionBotAddress) external;
+    function notify(address user, bytes calldata msgData) external;
+    function raiseAlert(address user) external;
+}
+
+contract Forta is IForta {
+    mapping(address => IDetectionBot) public usersDetectionBots;
+    mapping(address => uint256) public botRaisedAlerts;
+
+    function setDetectionBot(address detectionBotAddress) external override {
+        usersDetectionBots[msg.sender] = IDetectionBot(detectionBotAddress);
+    }
+
+    function notify(address user, bytes calldata msgData) external override {
+        if (address(usersDetectionBots[user]) == address(0)) return;
+        try usersDetectionBots[user].handleTransaction(user, msgData) {
+            return;
+        } catch {}
+    }
+
+    function raiseAlert(address user) external override {
+        if (address(usersDetectionBots[user]) != msg.sender) return;
+        botRaisedAlerts[msg.sender] += 1;
+    }
+}
+
+contract CryptoVault {
+    address public sweptTokensRecipient;
+    IERC20 public underlying;
+
+    constructor(address recipient) {
+        sweptTokensRecipient = recipient;
+    }
+
+    function setUnderlying(address latestToken) public {
+        require(address(underlying) == address(0), "Already set");
+        underlying = IERC20(latestToken);
+    }
+
+    /*
+    ...
+    */
+
+    function sweepToken(IERC20 token) public {
+        require(token != underlying, "Can't transfer underlying token");
+        token.transfer(sweptTokensRecipient, token.balanceOf(address(this)));
+    }
+}
+
+contract LegacyToken is ERC20("LegacyToken", "LGT"), Ownable {
+    DelegateERC20 public delegate;
+
+    function mint(address to, uint256 amount) public onlyOwner {
+        _mint(to, amount);
+    }
+
+    function delegateToNewContract(DelegateERC20 newContract) public onlyOwner {
+        delegate = newContract;
+    }
+
+    function transfer(address to, uint256 value) public override returns (bool) {
+        if (address(delegate) == address(0)) {
+            return super.transfer(to, value);
+        } else {
+            return delegate.delegateTransfer(to, value, msg.sender);
+        }
+    }
+}
+
+contract DoubleEntryPoint is ERC20("DoubleEntryPointToken", "DET"), DelegateERC20, Ownable {
+    address public cryptoVault;
+    address public player;
+    address public delegatedFrom;
+    Forta public forta;
+
+    constructor(address legacyToken, address vaultAddress, address fortaAddress, address playerAddress) {
+        delegatedFrom = legacyToken;
+        forta = Forta(fortaAddress);
+        player = playerAddress;
+        cryptoVault = vaultAddress;
+        _mint(cryptoVault, 100 ether);
+    }
+
+    modifier onlyDelegateFrom() {
+        require(msg.sender == delegatedFrom, "Not legacy contract");
+        _;
+    }
+
+    modifier fortaNotify() {
+        address detectionBot = address(forta.usersDetectionBots(player));
+
+        // Cache old number of bot alerts
+        uint256 previousValue = forta.botRaisedAlerts(detectionBot);
+
+        // Notify Forta
+        forta.notify(player, msg.data);
+
+        // Continue execution
+        _;
+
+        // Check if alarms have been raised
+        if (forta.botRaisedAlerts(detectionBot) > previousValue) revert("Alert has been triggered, reverting");
+    }
+
+    function delegateTransfer(address to, uint256 value, address origSender)
+        public
+        override
+        onlyDelegateFrom
+        fortaNotify
+        returns (bool)
+    {
+        _transfer(origSender, to, value);
+        return true;
+    }
+}
+```
+
+## Solution
+
+### Contract Walkthrough
+
+Given that the Solidity code for this level is quite long compared to other Ethernaut challenges, let's investigate the different pieces individually to better understand what's going on.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "openzeppelin-contracts-08/access/Ownable.sol";
+import "openzeppelin-contracts-08/token/ERC20/ERC20.sol";
+
+interface DelegateERC20 {
+    function delegateTransfer(address to, uint256 value, address origSender) external returns (bool);
+}
+
+interface IDetectionBot {
+    function handleTransaction(address user, bytes calldata msgData) external;
+}
+
+interface IForta {
+    function setDetectionBot(address detectionBotAddress) external;
+    function notify(address user, bytes calldata msgData) external;
+    function raiseAlert(address user) external;
+}
+```
+
+The first few lines of the file are straightforward.
+First, we import the `Ownable` and `ERC20` implementations from OpenZeppelin's contract library.
+Next, we define three interfaces:
+
+1. `DelegateERC20`, which includes a custom transfer function for ERC20s.
+2. `IDetectionBot`, which tells us that detection bots should include a `handleTransaction()` function.
+3. `IForta`, which includes bot-related functionality like notifications, alerts, and a function to set the detection bot's address.
+
+We'll take a closer look at all of these functions in a bit.
+
+To start, let's consider the first contract.
+
+```solidity
+contract Forta is IForta {
+    mapping(address => IDetectionBot) public usersDetectionBots;
+    mapping(address => uint256) public botRaisedAlerts;
+
+    function setDetectionBot(address detectionBotAddress) external override {
+        usersDetectionBots[msg.sender] = IDetectionBot(detectionBotAddress);
+    }
+
+    function notify(address user, bytes calldata msgData) external override {
+        if (address(usersDetectionBots[user]) == address(0)) return;
+        try usersDetectionBots[user].handleTransaction(user, msgData) {
+            return;
+        } catch {}
+    }
+
+    function raiseAlert(address user) external override {
+        if (address(usersDetectionBots[user]) != msg.sender) return;
+        botRaisedAlerts[msg.sender] += 1;
+    }
+}
+```
+
+The first thing we notice is that this contract implements the `IForta` interface.
+In addition to the `setDetectionBot()`, `notify()`, and `raiseAlert()` functions, we see two mappings.
+`usersDetectionBots` is a mapping from users to detection bots, i.e., given a user address, the mapping will return the associated detection bot.
+`botRaisedAlerts`, on the other hand, tracks how many alerts a given detection bot has already raised.
+
+Let's take a closer look at the functions:
+
+- `setDetectionBot()` allows anyone to register a new detection bot for themselves by providing the bot's address. Notice that each user can only have one detection bot at any given time.
+- `notify()` first checks whether the specified user has already registered a detection bot. If the user didn't, it simply returns. If the user did, it tries to call `handleTransaction()` on the user's detection bot and returns, if successful. If the call to `handleTransaction()` is not successful, it does nothing.
+- `raiseAlert()` first checks that the caller is the specified user's bot and, if so, raises the bot alert count by 1.
+
+Now that we have a basic understanding of the `Forta` contract, let's take a closer look at the `CryptoVault` contract:
+
+```solidity
+contract CryptoVault {
+    address public sweptTokensRecipient;
+    IERC20 public underlying;
+
+    constructor(address recipient) {
+        sweptTokensRecipient = recipient;
+    }
+
+    function setUnderlying(address latestToken) public {
+        require(address(underlying) == address(0), "Already set");
+        underlying = IERC20(latestToken);
+    }
+
+    /*
+    ...
+    */
+
+    function sweepToken(IERC20 token) public {
+        require(token != underlying, "Can't transfer underlying token");
+        token.transfer(sweptTokensRecipient, token.balanceOf(address(this)));
+    }
+}
+```
+
+The level description provides a nice summary, which is why I simply quote it here:
+
+_This level features a `CryptoVault` with special functionality, the `sweepToken` function. This is a common function used to retrieve tokens stuck in a contract. The `CryptoVault` operates with an underlying token that can't be swept, as it is an important core logic component of the `CryptoVault`. Any other tokens can be swept._ 
+
+The remaining details of the `CryptoVault` contract should be self-explanatory.
+
+Next, let's take a closer look at the `LegacyToken` contract:
+
+```solidity
+contract LegacyToken is ERC20("LegacyToken", "LGT"), Ownable {
+    DelegateERC20 public delegate;
+
+    function mint(address to, uint256 amount) public onlyOwner {
+        _mint(to, amount);
+    }
+
+    function delegateToNewContract(DelegateERC20 newContract) public onlyOwner {
+        delegate = newContract;
+    }
+
+    function transfer(address to, uint256 value) public override returns (bool) {
+        if (address(delegate) == address(0)) {
+            return super.transfer(to, value);
+        } else {
+            return delegate.delegateTransfer(to, value, msg.sender);
+        }
+    }
+}
+```
+
+We can see that `LegacyToken` is an ownable ERC20 implementation. 
+In addition to the standard ERC20 interface and `Ownable`'s functions, the `LegacyToken` contract implements three additional functions:
+
+- `mint()` can be used by the owner to mint `amount` tokens into `to`'s account.
+- `delegateToNewContract()` allows the owner to set a new `delegate`. (We will take a closer look at a contract that implements the `DelegateERC20` interface in a bit.)
+- `transfer()` is either just a normal ERC20 `transfer()` or a `delegateTransfer()` depending on whether or not a `delegate` has been set.
+
+Lastly, let's consider the `DoubleEntryPoint` contract:
+
+```solidity
+contract DoubleEntryPoint is ERC20("DoubleEntryPointToken", "DET"), DelegateERC20, Ownable {
+    address public cryptoVault;
+    address public player;
+    address public delegatedFrom;
+    Forta public forta;
+
+    constructor(address legacyToken, address vaultAddress, address fortaAddress, address playerAddress) {
+        delegatedFrom = legacyToken;
+        forta = Forta(fortaAddress);
+        player = playerAddress;
+        cryptoVault = vaultAddress;
+        _mint(cryptoVault, 100 ether);
+    }
+
+    modifier onlyDelegateFrom() {
+        require(msg.sender == delegatedFrom, "Not legacy contract");
+        _;
+    }
+
+    modifier fortaNotify() {
+        address detectionBot = address(forta.usersDetectionBots(player));
+
+        // Cache old number of bot alerts
+        uint256 previousValue = forta.botRaisedAlerts(detectionBot);
+
+        // Notify Forta
+        forta.notify(player, msg.data);
+
+        // Continue execution
+        _;
+
+        // Check if alarms have been raised
+        if (forta.botRaisedAlerts(detectionBot) > previousValue) revert("Alert has been triggered, reverting");
+    }
+
+    function delegateTransfer(address to, uint256 value, address origSender)
+        public
+        override
+        onlyDelegateFrom
+        fortaNotify
+        returns (bool)
+    {
+        _transfer(origSender, to, value);
+        return true;
+    }
+}
+```
+
+At the top of the contract, we see that it keeps track of the `cryptoVault` and the `player` as well as the `Forta` contract and the `delegatedFrom`, which is set to the address of the `LegacyToken`.
+The constructor initializes all of the aforementioned state variables and mints 100 DET to the vault.
+Next, we see that there's an `onlyDelegateFrom()` modifier that checks whether the function caller is the `LegacyToken`.
+In addition, there is a second modifier, `fortaNotify()`, that
+
+1. determines the old number of bot alerts,
+2. executes the logic of the function it is applied to, and
+3. reverts execution if new alerts have been raised.
+
+Notice that this is exactly the functionality that will later allow us to prevent attacks using a detection bot.
+Lastly, there is the `delegateTransfer()` function that comes with both the `onlyDelegateFrom` and `fortaNotify` modifiers and simply transfers the specified `value` from `origSender` to `to`.
+
+### Vulnerability
+
+While the level's Solidity code is quite a lot compared to other Ethernaut challenges, the level description already tells us that the bug we're looking for is located in the `CryptoVault` contract.
+
+_"In this level you should figure out where the bug is in CryptoVault and protect it from being drained out of tokens."_
+
+Now that we have a good overview of all the different code parts of this level, it's relatively straightforward to spot that we can drain all tokens from the vault by calling `sweepToken()` and specifying the `LegacyToken` contract as the parameter.
+
+### Mitigation
+
+To prevent this attack, we must create a Forta detection bot that implements the `IDetectionBot` interface.
+Notice that our detection bot's `handleTransaction()` function will be called by the `notify()` function of the `Forta` contract.
+Furthermore, notice that our bot must call `raiseAlert()` on its caller, i.e., on the `Forta` contract.
+
+Now, to prevent the attack, recall the various steps involved:
+First, we call `sweepToken()` of `CryptoVault`, passing `LegacyToken` as the `token` parameter.
+Subsequently, there will be a message call to the `delegateTransfer()` function of `DoubleEntryPoint`.
+The data of this message call is what our bot will receive on `handleTransaction()` because `delegateTransfer()` has the `fortaNotify` modifier applied to it.
+
+Note that the only thing we can use to trigger our alert is the `origSender` parameter, which will be the address of `CryptoVault` during our attack.
+Therefore, our bot can simply check the value of that parameter in the calldata and raise an alert if the value of `origSender` equals the address of the `CryptoVault`.
+
+To implement this check, you will need to have a thorough understanding of [Solidity's Contract ABI Specification](https://docs.soliditylang.org/en/v0.8.15/abi-spec.html#abi).
+Otherwise, it will be quite hard to grasp how the calldata in question is structured.
+
+Before we take a closer look at the calldata, notice that our bot's `handleTransaction()` is called with the same `msg.data` passed to `notify()`.
+Hence, during `handleTransaction`, the calldata will have the actual calldata to call that function and the `delegateCall()` calldata as an argument.
+
+We, therefore, have the following table:
+
+| Position | Bytes | Type                  | Value                                                         |
+|----------|-------|-----------------------|---------------------------------------------------------------|
+| 0x00     | 4     | `bytes4`              | Function selector of `handleTransaction()`                    |
+| 0x04     | 32    | `address` (padded)    | `user` parameter                                              |
+| 0x24     | 32    | `uint256`             | Offset of `msgData`, 0x40 in this case                        |
+| 0x44     | 32    | `uint256`             | Length of `msgData`, 0x64 in this case                        |
+| 0x64     | 4     | `bytes4`              | Function selector of `delegateTransfer()`                     |
+| 0x68     | 32    | `address` (padded)    | `to` parameter                                                |
+| 0x88     | 32    | `uint256`             | `value` parameter                                             |
+| **0xa8** |**32** |**`address` (padded)** | **`origSender` parameter**                                    |
+| 0xc8     | 28    | padding               | 0-padding as per the 32-byte arguments rule of encoding bytes |
+
+With this knowledge, we can finally implement our detection bot as follows:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+interface IDetectionBot {
+    function handleTransaction(address user, bytes calldata msgData) external;
+}
+
+interface IForta {
+    function raiseAlert(address user) external;
+}
+
+contract MyDetectionBot is IDetectionBot {
+    address public immutable CRYPTO_VAULT;
+
+    constructor(address cryptoVault) {
+        CRYPTO_VAULT = cryptoVault;
+    }
+
+    // Comment out msgDate to silence "unused parameter" warning
+    function handleTransaction(address user, bytes calldata /* msgData */) external {
+        // Get origSender from calldata
+        address origSender;
+        assembly {
+            origSender := calldataload(0xa8)
+        }
+
+        // Raise alert if msg.sender is the CryptoVault contract
+        if (origSender == CRYPTO_VAULT) {
+            IForta(msg.sender).raiseAlert(user);
+        }
+    }
+}
+```
+
+When deploying the bot, we need to pass the `CryptoVault`'s address as a constructor parameter.
+Notice that we can retrieve this address in the Ethernaut console via:
+
+```javascript
+await contract.cryptoVault()
+```
+
+After the bot has been deployed, the only thing that is left to do is calling `setDetectionBot()` on the `Forta` contract, passing our bot's address as the parameter.
+Therefore, we first determine the `Forta` contract address in the Ethernaut console via
+
+```javascript
+await contract.forta()
+```
+and subsequently call `setDetectionBot()` via Cast:
+
+```bash
+cast send <your Forta contract address> "setDetectionBot(address)" <your detection bot address> --rpc-url <your RPC URL> --private-key <your private key>
+```
+
+Once the bot has been successfully set, you can submit the level instance to complete the challenge.
