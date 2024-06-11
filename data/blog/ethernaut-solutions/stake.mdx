@@ -1,0 +1,91 @@
+---
+title: Ethernaut - Stake - Solution
+date: '2024-06-11'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Stake CTF
+---
+
+# Ethernaut - Stake - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+contract Stake {
+
+    uint256 public totalStaked;
+    mapping(address => uint256) public UserStake;
+    mapping(address => bool) public Stakers;
+    address public WETH;
+
+    constructor(address _weth) payable{
+        totalStaked += msg.value;
+        WETH = _weth;
+    }
+
+    function StakeETH() public payable {
+        require(msg.value > 0.001 ether, "Don't be cheap");
+        totalStaked += msg.value;
+        UserStake[msg.sender] += msg.value;
+        Stakers[msg.sender] = true;
+    }
+    function StakeWETH(uint256 amount) public returns (bool){
+        require(amount >  0.001 ether, "Don't be cheap");
+        (,bytes memory allowance) = WETH.call(abi.encodeWithSelector(0xdd62ed3e, msg.sender,address(this)));
+        require(bytesToUint(allowance) >= amount,"How am I moving the funds honey?");
+        totalStaked += amount;
+        UserStake[msg.sender] += amount;
+        (bool transfered, ) = WETH.call(abi.encodeWithSelector(0x23b872dd, msg.sender,address(this),amount));
+        Stakers[msg.sender] = true;
+        return transfered;
+    }
+
+    function Unstake(uint256 amount) public returns (bool){
+        require(UserStake[msg.sender] >= amount,"Don't be greedy");
+        UserStake[msg.sender] -= amount;
+        totalStaked -= amount;
+        (bool success, ) = payable(msg.sender).call{value : amount}("");
+        return success;
+    }
+    function bytesToUint(bytes memory data) internal pure returns (uint256) {
+        require(data.length >= 32, "Data length must be at least 32 bytes");
+        uint256 result;
+        assembly {
+            result := mload(add(data, 0x20))
+        }
+        return result;
+    }
+}
+```
+
+## Solution
+
+The goal of this level is to manipulate the level instance's contract state such that:
+
+1. The `Stake` contract's ETH balance is greater than 0.
+2. `totalStaked` is greater than the `Stake` contract's ETH balance.
+3. Our player EOA is registered as a staker.
+4. Our player EOA's staked balance is 0.
+
+To fulfill requirements 3. and 4., we first call `StakeETH()` and subsequently `Unstake()`, specifying the first call's value as the second call's `amount`.
+
+To fulfill requirement 1., we can use an account different from our player EOA (let's call that account "minion") and call `StakeETH()` from our minion's account.
+Notice that this leaves requirements 3. and 4. intact.
+
+Lastly, to fulfill requirement 2., we first notice that `0xdd62ed3e` is the function selector for `WETH`'s `allowance()` while `0x23b872dd` is the selector for `transferFrom()`.
+Furthermore, we see that the return value of the low-level call
+
+```solidity
+(bool transfered, ) = WETH.call(abi.encodeWithSelector(0x23b872dd, msg.sender,address(this),amount));
+```
+
+is not properly validated.
+In other words, `StakeWETH()` does not revert if the external function call reverts.
+Instead, it simply continues execution.
+
+Therefore, we can fulfill requirement 2. by having our minion call
+
+1. `approve()` on the `WETH` contract, specifying a non-zero `_value` and the level instance as the `_spender` (to determine `WETH`'s address, use `await contract.WETH()` in the Ethernaut console). 
+2.  `StakeWETH()` specifying the allowance given in step 1. as the `amount`.
