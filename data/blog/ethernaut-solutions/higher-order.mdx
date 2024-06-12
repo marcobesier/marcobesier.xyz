@@ -1,0 +1,61 @@
+---
+title: Ethernaut - Higher Order - Solution
+date: '2024-06-12'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Higher Order CTF
+---
+
+# Ethernaut - Higher Order - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity 0.6.12;
+
+contract HigherOrder {
+    address public commander;
+
+    uint256 public treasury;
+
+    function registerTreasury(uint8) public {
+        assembly {
+            sstore(treasury_slot, calldataload(4))
+        }
+    }
+
+    function claimLeadership() public {
+        if (treasury > 255) commander = msg.sender;
+        else revert("Only members of the Higher Order can become Commander");
+    }
+}
+```
+
+## Solution
+
+The goal of this challenge is to become the `commander` by setting `treasury` to a value greater than 255.
+
+If we naively try to achieve this, e.g., via
+
+```javascript
+await contract.registerTreasury(256)
+```
+
+the function's parameter type validation will prevent the transaction from succeeding.
+
+If we, however, specify the calldata manually and send it off via `sendTransaction`, we can simply change one of the higher-order zeros to 1, bypassing the function's type check:
+
+```javascript
+await sendTransaction({from: "<your player address>", to: "<your level instance address>", input: "0x211c85ab00000000000000000000000000000000000000000000000000000000000001ff"})
+```
+
+In the command above, `211c85ab` is the function selector of `registerTreasury()` and `00000000000000000000000000000000000000000000000000000000000001ff` is the 32-byte word that corresponds to the decimal number 511 when interpreted as a `uint256`.
+
+All that is left to do is to issue 
+
+```javascript
+await contract.claimLeadership()
+```
+
+in the Ethernaut console in order to complete the level.
