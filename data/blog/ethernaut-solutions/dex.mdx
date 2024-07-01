@@ -1,6 +1,6 @@
 ---
 title: Ethernaut - Dex - Solution
-date: '2024-05-27'
+date: '2024-07-01'
 tags: ['security', 'solidity', 'ctfs']
 draft: false
 summary: Solution to the Ethernaut - Dex CTF
@@ -78,7 +78,6 @@ contract SwappableToken is ERC20 {
 The goal of this challenge is to steal the entire balance of at least one of the two tokens from the dex.
 
 When executing the `swap()` function twice in a row, i.e., swapping 10 `token1` for 10 `token2` and subsequently swapping our entire balance of 20 `token2`, we notice that we receive 24 `token1`!
-This is because `getSwapPrice()` rounds in favor of the user rather than the protocol.
 In other words, we can drain one of the tokens from the dex entirely, simply by swapping the player's entire balance back and forth multiple times in a row.
 
 More specifically, we have the following table, where p1 and p2 are the player's balances of `token1` and `token2` and d1 and d2 are the dex's balances, respectively:
