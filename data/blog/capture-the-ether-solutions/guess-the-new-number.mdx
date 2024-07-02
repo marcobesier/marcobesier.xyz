@@ -36,7 +36,7 @@ contract GuessNewNumber {
 }
 ```
 
-## Exploit
+## Solution
 
 Since both `blockhash(block.number - 1)` and `block.timestamp` can also be accessed by an attacker contract, we can reproduce `answer` inside an attacker contract using the exact same code:
 

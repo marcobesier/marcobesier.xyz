@@ -46,7 +46,7 @@ contract GuessRandomNumber {
 }
 ```
 
-## Exploit
+## Solution
 
 Note that the "random" number is generated based on known block parameters such as the previous block's hash and the current block's timestamp.
 Therefore, we can simply replicate the "random" number by using the very same generation code in our exploit:

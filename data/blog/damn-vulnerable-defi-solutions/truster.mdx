@@ -53,7 +53,7 @@ contract TrusterLenderPool is ReentrancyGuard {
 }
 ```
 
-## Exploit
+## Solution
 
 To solve this challenge, note that `flashLoan` allows for arbitrary function calls on the `target` contract. In other words, by calling `flashLoan`, we can make arbitrary function calls on the `TrusterLenderPool` contract's behalf.
 

@@ -52,7 +52,7 @@ contract PredictTheBlockhash {
 }
 ```
 
-## Exploit
+## Solution
 
 To exploit this contract, it's important to know that `blockhash` only returns the actual block hash for the last 256 blocks due to performance reasons. For any blocks that lie further in the past, `blockhash` will return `0x0000000000000000000000000000000000000000000000000000000000000000`.
 

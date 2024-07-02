@@ -60,7 +60,7 @@ contract SideEntranceLenderPool {
 }
 ```
 
-## Exploit
+## Solution
 
 This challenge is conveniently solved via Remix. First, we deploy the contract from Remix's default account. Next, we call `deposit`, specifying a transaction value of `42000000000000000000 == 42 ether` to fund the pool with its initial balance. (The original assignment described in Damn Vulnerable DeFi specifies a pool with an initial balance of 1000 ether instead of 42 ether. However, bumping the contract's balance up to 1000 ether is quite tedious in Remix. Since the exact pool balance doesn't really matter, we'll assume a pool balance of 42 ether instead of 1000 ether for convenience.)
 
