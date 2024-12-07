@@ -1,0 +1,141 @@
+---
+title: On the Rationalizability of Square Roots in Two Variables
+date: '2024-12-07'
+tags: ['mathematics', 'physics']
+draft: false
+summary: A practical guide on how to decide the rationalizability of square roots in two variables using Magma.
+---
+
+# On the Rationalizability of Square Roots in Two Variables
+
+When computing Feynman integrals in theoretical particle physics, one often encounters expressions involving square roots of polynomial functions in multiple variables. A central question is whether these square roots can be "rationalized," that is, transformed into expressions involving only rational functions after a suitable change of variables. Rationalizability is closely tied to the geometric properties of certain algebraic varieties. In the [*Rationalizability of square roots* paper](https://arxiv.org/abs/2006.07121), Dr. Dino Festi and I develop various criteria and computational approaches for determining whether given sets of square roots are rationalizable.
+
+One of the main results we present is the `NonADE` function for the Computational Algebra System [Magma](http://magma.maths.usyd.edu.au/magma/). `NonADE` can be used to decide rationalizability for square roots in two variables by checking whether the associated double cover of a given square root has only ADE singularities. This post provides a concise guide on how to use `NonADE` within the [Magma Online Calculator](http://magma.maths.usyd.edu.au/calc/), and illustrates these steps with a concrete example from the paper.
+
+## How to Set Up `NonADE` in the Magma Online Calculator
+
+To use the `NonADE` function in the Magma Online Calculator, first copy the contents of the [`NonADE` implementation](https://raw.githubusercontent.com/marcobesier/rationalizability-of-square-roots/refs/heads/master/NonADE.txt) and paste the code into the [calculator](http://magma.maths.usyd.edu.au/calc/).
+
+You can then call the function below its definition via
+
+```
+NonADE(basering, polynomial);
+````
+
+where `polynomial` is the defining polynomial of the branch curve and `basering` is the ring $k[X_1,...,X_n]$ containing that polynomial.
+The output will list all non-ADE singularities that the double cover has over $k$.
+If the double cover is smooth or has only ADE singularities, the function will return the empty list.
+
+## A Real-World Application of `NonADE`
+
+### The Square Roots in Question
+
+To see how `NonADE` is to be applied in practice, consider the following alphabet, encountered in [perturbative corrections to di-photon and di-jet hadro-production](https://arxiv.org/pdf/1712.02537):
+$$
+\begin{align*}
+    \mathcal{A}=&\Big\{\; \sqrt{X+1},\; \sqrt{X-1}, \; \sqrt{Y+1},\\  & \sqrt{X+Y+1},\; \sqrt{16X+(4+Y)^2}\; \Big\}.
+\end{align*}
+$$
+We write $f_1,..., f_5$ for the square root arguments.
+To show that $\mathcal{A}$ is not rationalizable, we consider $J=\{1, 2, 3, 4, 5\}$, define
+$$
+f(X,Y):=\prod_{j\in J} f_j=(X+1)(X-1)(Y+1)(X+Y+1)(16X+(4+Y)^2),
+$$
+and denote the associated double cover of $\sqrt{f}$ by $\overline{S}$.
+In other words, $\overline{S}$ is the hypersurface in the weighted projective space $\mathbb{P}_\mathbb{C}(1,1,1,3)$, which is defined by the equation
+$$
+\begin{equation*}
+    u^2=(x+z)(x-z)(y+z)(x+y+z)(16xz+(4z+y)^2).
+\end{equation*}
+$$
+The branch curve of $\overline{S}$ is, therefore, given by the projective curve $\overline{B}\subset\mathbb{P}^2_{\mathbb{C}}$, defined as the zeros of the polynomial
+$$
+\begin{equation*}
+    F(x,y,z):=(x+z)(x-z)(y+z)(x+y+z)(16xz+(4z+y)^2).
+\end{equation*}
+$$
+Since deg$(f)=\text{deg}(F)=6$, we can prove that $\mathcal{A}$ is not simultaneously rationalizable by showing that $\overline{S}$ has at most ADE singularities.
+
+### Taking Care of Irrationalities
+
+Before we can use `NonADE`, though, there is one important subtlety that we have to address first:
+not all singular points of $\overline{S}$ have rational coordinates. 
+This poses a challenge because, although Magma permits selecting $k=\mathbb{Q}$ as the base field, it does not allow choosing $k=\mathbb{C}$.
+That means, if we would determine the singular points of $\overline{S}$ over $k=\mathbb{Q}$, `NonADE` would only classify the singular points of $\overline{S}$ that have purely rational coordinates and would, therefore, miss two of the singular points that $\overline{S}$ has over the complex numbers.
+
+We can resolve this problem by first computing the singular points with a different computer algebra software that will not only be sensitive to singularities over $\mathbb{Q}$ but to all singular points of $\overline{S}$ over $\mathbb{C}$.
+Since all singularities of a double cover stem from its branch locus, it suffices to look at the singularities of $\overline{B}$.
+To determine the singular points of $\overline{B}$, one can use the Jacobi criterion, which says that $p$ is a singular point of $\overline{B}$ if and only if
+$$
+F(p)=\frac{\partial F}{\partial x}(p)=\frac{\partial F}{\partial y}(p)=\frac{\partial F}{\partial z}(p)=0.
+$$
+For example, we can compute the singular points in [Mathematica](https://www.wolfram.com/mathematica/) via
+
+```
+F:= (x+z)*(x-z)*(y+z)*(x+y+z)*(16*x*z+(4*z+y)^2)
+
+Solve[F==0 && D[F,x]==0 && D[F,y]==0 && D[F,z]==0]
+```
+
+giving us the output
+
+```
+{{x -> -z, y -> 0}, {x -> -z, y -> -8 z}, {x -> -z, y -> -z},
+ {x -> z, y -> (-4 - 4i) z}, {x -> z, y -> (-4 + 4i) z},
+ {x -> z, y -> -2 z}, {x -> z, y -> -z},
+ {x -> -((9 z)/16), y -> -z}, {x -> -9 z, y -> 8 z},
+ {x -> 0, z -> 0}, {y -> 0, z -> 0}, {x -> 0, y -> -z},
+ {x -> 0, y -> 0, z -> 0}}
+```
+
+
+Notice that this output should be interpreted as a list of points in $\mathbb{P}_\mathbb{C}^2$, and that we ignore the trivial solution since $(0:0:0)$ does not define a point in the projective plane.
+We see that $\overline{B}$ has twelve different singular points as a curve over $\mathbb{C}$.
+Furthermore, we note that two points have an irrational number in their coordinates:
+the complex unit $i$.
+Therefore, the coordinates of the two corresponding singularities of $\overline{S}$ will also involve the complex unit.
+
+### Applying `NonADE` to Decide Rationalizability
+
+Knowing which irrationalities occur, we can perform the remaining analysis in Magma:
+to ensure that `NonADE` takes all singular points of $\overline{S}$ into account, we have to adjoin $i$ to the coefficient field $\mathbb{Q}$ of our base ring.
+Put differently, we have to pass from $\mathbb{Q}$ to the extension field $\mathbb{Q}(\sqrt{-1})$.
+
+A convenient way to construct an extension field for $\mathbb{Q}$ is to consider a quotient ring of the polynomial ring $\mathbb{Q}[q]$ that corresponds to the irrational numbers we want to be contained in the extension field.
+In our example, we want to extend $\mathbb{Q}$ by $i$, i.e., we want to adjoin an element $i$ that satisfies $i^2+1=0$.
+The field $\mathbb{Q}(\sqrt{-1})$ is, therefore, isomorphic to the quotient $\mathbb{Q}[q]/(q^2+1)$. 
+In Magma, we can define $\mathbb{Q}(\sqrt{-1})$ via
+```
+QQ:=Rationals();
+
+E<i>:=ext<QQ|[Polynomial([1,0,1])]>; 
+```
+
+where `Polynomial([1,0,1])` specifies the coefficients of the polynomial $g(q)$ in the quotient $\mathbb{Q}[q]/g$; in our case $g=1\cdot q^0+0\cdot q^1+1\cdot q^2$.
+
+Now, we can easily prove the non-rationalizability of $\mathcal{A}$ using `NonADE`:
+
+```
+/////////////////////////////////////////
+// paste implementation of NonADE here //
+/////////////////////////////////////////
+
+k:=Rationals();
+
+E<i>:=ext<k|[Polynomial([1,0,1])]>;
+
+R<x,y,z>:=PolynomialRing(E,3);
+
+F:=(x+z)*(x-z)*(y+z)*(x+y+z)*(16*x*z+(4*z+y)\cir2);
+
+NonADE(R,F);
+
+// Output: {[]}
+```
+
+Since `NonADE` returns the empty list, we conclude that $\overline{S}$ has at most ADE singularities.
+As a result, $\mathcal{A}$ is not rationalizable.
+
+## Wrapping Things Up
+
+In this post, we discussed the connection between the rationalizability of square roots in two variables and the classification of singularities on associated double covers. We introduced the `NonADE` function for Magma, which identifies whether a given double cover has only ADE singularities. By examining a concrete example from high-energy particle physics, we demonstrated how to handle irrational coordinates, create suitable field extensions, and apply `NonADE` to decide on the rationalizability of the corresponding square roots.
