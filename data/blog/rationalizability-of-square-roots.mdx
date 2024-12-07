@@ -10,7 +10,7 @@ When computing Feynman integrals in theoretical particle physics, one often enco
 
 One of the main results we present is the `NonADE` function for the Computational Algebra System [Magma](http://magma.maths.usyd.edu.au/magma/). `NonADE` can be used to decide rationalizability for square roots in two variables by checking whether the associated double cover of a given square root has only ADE singularities. This post provides a concise guide on how to use `NonADE` within the [Magma Online Calculator](http://magma.maths.usyd.edu.au/calc/), and illustrates these steps with a concrete example from the paper.
 
-# How to Set Up `NonADE` in the Magma Online Calculator
+## How to Set Up `NonADE` in the Magma Online Calculator
 
 To use the `NonADE` function in the Magma Online Calculator, first copy the contents of the [`NonADE` implementation](https://raw.githubusercontent.com/marcobesier/rationalizability-of-square-roots/refs/heads/master/NonADE.txt) and paste the code into the [calculator](http://magma.maths.usyd.edu.au/calc/).
 
@@ -24,9 +24,9 @@ where `polynomial` is the defining polynomial of the branch curve and `basering`
 The output will list all non-ADE singularities that the double cover has over $k$.
 If the double cover is smooth or has only ADE singularities, the function will return the empty list.
 
-# A Real-World Application of `NonADE`
+## A Real-World Application of `NonADE`
 
-## The Square Roots in Question
+### The Square Roots in Question
 
 To see how `NonADE` is to be applied in practice, consider the following alphabet, encountered in [perturbative corrections to di-photon and di-jet hadro-production](https://arxiv.org/pdf/1712.02537):
 $$
@@ -54,7 +54,7 @@ $$
 $$
 Since $\text{deg}(f)=\text{deg}(F)=6$, we can prove that $\mathcal{A}$ is not simultaneously rationalizable by showing that $\overline{S}$ has at most ADE singularities.
 
-## Taking Care of Irrationalities
+### Taking Care of Irrationalities
 
 Before we can use `NonADE`, though, there is one important subtlety that we have to address first:
 not all singular points of $\overline{S}$ have rational coordinates. 
@@ -93,7 +93,7 @@ Furthermore, we note that two points have an irrational number in their coordina
 the complex unit $i$.
 Therefore, the coordinates of the two corresponding singularities of $\overline{S}$ will also involve the complex unit.
 
-## Applying `NonADE` to Decide Rationalizability
+### Applying `NonADE` to Decide Rationalizability
 
 Knowing which irrationalities occur, we can perform the remaining analysis in Magma:
 to ensure that `NonADE` takes all singular points of $\overline{S}$ into account, we have to adjoin $i$ to the coefficient field $\mathbb{Q}$ of our base ring.
@@ -134,6 +134,6 @@ NonADE(R,F);
 Since `NonADE` returns the empty list, we conclude that $\overline{S}$ has at most ADE singularities.
 As a result, $\mathcal{A}$ is not rationalizable.
 
-# Summary
+## Summary
 
 In this post, we discussed the connection between the rationalizability of square roots in two variables and the classification of singularities on associated double covers. We introduced the `NonADE` function for Magma, which identifies whether a given double cover has only ADE singularities. By examining a concrete example from high-energy particle physics, we demonstrated how to handle irrational coordinates, create suitable field extensions, and apply `NonADE` to decide on the rationalizability of the corresponding square roots.
