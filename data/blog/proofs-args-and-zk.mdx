@@ -22,6 +22,25 @@ Show that:
 
 - If there is even one $(i,j) \in [n] \times [n]$ such that $C_{ij} \neq (AB)_{ij}$, then the algorithm outputs NOT-EQUAL with probability at least $1 - 1/|\mathbb{F}|$.
 
+#### Solution
+
+First, let $x = (x_1,...,x_n)\in \mathbb{F}^n$, where each $x_i$ is chosen independently and uniformly at random from $\mathbb{F}$.
+Furthermore, let $D = A \cdot B$, so that our goal is to determine whether the $\textit{claimed}$ product matrix $C$ actually equals the $\textit{true}$ product matrix $D$.
+
+The first property (completeness) is easy to see:
+if $C=D$, then clearly $Cx=Dx$ for any $x\in \mathbb{F}^n$, so the algorithm will output EQUAL for every choice of $x$.
+
+To see that the second property (soundness) holds, let us define the matrix $E := C-D$.
+Furthermore, suppose $C\neq D$, i.e., $E\neq 0$.
+Since $E$ is non-zero, we have that $\text{rank}(E) \geq 1$.
+By the [rank-nullity theorem](https://en.wikipedia.org/wiki/Rank%E2%80%93nullity_theorem), we then have that $\text{dim(ker}(E)) \leq n-1$.
+Since our vector coordinates $x_i$ are sampled independently and uniformly at random from $\mathbb{F}$, the soundness error is given by 
+$$
+\text{Pr}_{x\in \mathbb{F}^n}[Ex=0] = \frac{|\text{ker}(E)|}{|\mathbb{F}^n|}\leq \frac{|\mathbb{F}^{n-1}|}{|\mathbb{F}^{n}|} = \frac{1}{|\mathbb{F}|}
+$$
+
+In other words, if there is even one $(i,j) \in [n] \times [n]$ such that $C_{ij} \neq (AB)_{ij}$, then the algorithm outputs NOT-EQUAL with probability at least $1 - 1/|\mathbb{F}|$.
+
 ### Exercise 3.2
 
 In Section 2.1, we described a communication protocol of logarithmic cost for determining whether Alice's and Bob's input vectors are equal.
@@ -34,7 +53,7 @@ What is the communication cost in bits of this protocol?
 
 Let $p = 11$. Consider the function $f:\{0,1\}^2\rightarrow\mathbb{F}_p$ given by $f(0,0)=3, f(0,1)=4, f(1,0)=1$, and $f(1,1)=2$.
 Write out an explicit expression for the multilinear extension $\tilde{f}$ of $f$. 
-What is $\tilde{f}(2,4)$
+What is $\tilde{f}(2,4)$?
 
 Now consider the function $f: \{0,1\}^3\rightarrow \mathbb{F}_p$ given by $f(0,0,0)=1, f(0,1,0)=2, f(1,0,0)=3, f(1,1,0)=4, f(0,0,1)=5, f(0,1,1)=6, f(1,0,1)=7, f(1,1,1)=8$.
 What is $\tilde{f}(2,4,6)$?
