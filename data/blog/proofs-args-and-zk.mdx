@@ -2,7 +2,7 @@
 title: Solutions to All Exercises in Justin Thaler's Proofs, Arguments, and Zero-Knowledge
 date: '2025-03-23'
 tags: ['zero knowledge', 'cryptography']
-draft: true
+draft: false
 summary: In this post, I discuss the solutions to all exercises in Justin Thaler's excellent book, Proofs, Arguments and Zero-Knowldge.
 ---
 
@@ -14,3 +14,35 @@ summary: In this post, I discuss the solutions to all exercises in Justin Thaler
 
 Let $A, B, C$ be $n \times n$ matrices over a field $\mathbb{F}$.
 In Section 2.2, we presented a randomized algorithm for checking that $C = A \cdot B$.
+The algorithm picked a random field element $r$, let $x = \left( r, r^2,...,r^n \right)$, and output EQUAL if $Cx = A \cdot (Bx)$, and output NOT-EQUAL otherwise.
+Suppose instead that each entry of the vector $x$ is chosen independently and uniformly at random from $\mathbb{F}$. 
+Show that:
+
+- If $C_{ij} = (AB)_{ij}$ for all $i = 1,...,n, j = 1,...,n$, then the algorithm outputs EQUAL for every possible choice of $x$.
+
+- If there is even one $(i,j) \in [n] \times [n]$ such that $C_{ij} \neq (AB)_{ij}$, then the algorithm outputs NOT-EQUAL with probability at least $1 - 1/|\mathbb{F}|$.
+
+### Exercise 3.2
+
+In Section 2.1, we described a communication protocol of logarithmic cost for determining whether Alice's and Bob's input vectors are equal.
+Specifically, Alice and Bob interpreted their inputs as degree-$n$ univariate polynomials $p_a$ and $p_b$, chose a random $r \in \mathbb{F}$ with $|\mathbb{F}|>>n$, and compared $p_a(r)$ to $p_b(r)$.
+Give a different communication protocol in which Alice and Bob interpret their inputs as multilinear rather than univariate polynomials over $\mathbb{F}$.
+How large should $\mathbb{F}$ be to ensure that the probability Bob outputs the wrong answer is at most $1/n$?
+What is the communication cost in bits of this protocol?
+
+### Exercise 3.3
+
+Let $p = 11$. Consider the function $f:\{0,1\}^2\rightarrow\mathbb{F}_p$ given by $f(0,0)=3, f(0,1)=4, f(1,0)=1$, and $f(1,1)=2$.
+Write out an explicit expression for the multilinear extension $\tilde{f}$ of $f$. 
+What is $\tilde{f}(2,4)$
+
+Now consider the function $f: \{0,1\}^3\rightarrow \mathbb{F}_p$ given by $f(0,0,0)=1, f(0,1,0)=2, f(1,0,0)=3, f(1,1,0)=4, f(0,0,1)=5, f(0,1,1)=6, f(1,0,1)=7, f(1,1,1)=8$.
+What is $\tilde{f}(2,4,6)$?
+How many field multiplications did you perform during the calculation?
+Can you work through the calculation of $\tilde{f}(2,4,6)$ that uses "just" 20 multipliactions operations?
+Hint: see Lemma 3.8.
+
+### Exercise 3.4
+
+Fix some prime $p$ of your choosing.
+Write a Python program that takes as input an array of lenght $2^l$ specifying all evaluations of a function $f: \{0,1\}^l \rightarrow \mathbb{F}_p$ and a vector $\mathbf{r}\in \mathbb{F}_p^l$, and outputs $\tilde{f}(\mathbf{r})$.
