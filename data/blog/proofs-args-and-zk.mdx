@@ -6,7 +6,7 @@ draft: false
 summary: In this post, I discuss the solutions to all exercises in Justin Thaler's excellent book, Proofs, Arguments and Zero-Knowldge.
 ---
 
-*This post is a work in progress.*
+# This post is a work in progress.
 
 ## Chapter 3: Definitions and Technical Preliminaries
 
@@ -48,6 +48,63 @@ Specifically, Alice and Bob interpreted their inputs as degree-$n$ univariate po
 Give a different communication protocol in which Alice and Bob interpret their inputs as multilinear rather than univariate polynomials over $\mathbb{F}$.
 How large should $\mathbb{F}$ be to ensure that the probability Bob outputs the wrong answer is at most $1/n$?
 What is the communication cost in bits of this protocol?
+
+#### Solution
+
+For the protocol to work, we assume (without loss of generality) that Alice's and Bob's vectors are both of length $2^l$.
+Whenever that's not the case, Alice and Bob agree to pad their vectors with zeros until the length becomes the next power of two available.
+
+With that assumption, Alice's vector $a = (a_0,a_1,...,a_{2^l-1})\in \mathbb{F}^{2^l}$ can be viewed as defining a function $f_a: \{0,1\}^l \rightarrow \mathbb{F}$.
+Let $\tilde{f}_a:\mathbb{F}^l\rightarrow \mathbb{F}$ denote the corresponding multilinear extension.
+
+Similarly, Bob's vector $b = (b_0,b_1,...,b_{2^l-1})\in \mathbb{F}^{2^l}$ can be viewed as defining a function $f_b: \{0,1\}^l \rightarrow \mathbb{F}$ with a corresponding multilinear extension $\tilde{f}_b:\mathbb{F}^l\rightarrow \mathbb{F}$.
+
+The steps of the protocol are as follows:
+
+1. Alice and Bob agree to encode their vectors into multilinear extensions as described above.
+2. Alice chooses a random point $r\in \mathbb{F}^l$.
+3. Alice sends $r$ and $\tilde{f}_a(r)$ to Bob.
+4. Bob computes $\tilde{f}_b(r)$ and checks if it's equal to $\tilde{f}_a(r)$.
+
+Now, how large should $\mathbb{F}$ be to ensure that the probability Bob outputs the wrong answer is at most $1/n$?
+To answer this question, note that if $f_a\neq f_b$, then $\tilde{f}_a - \tilde{f}_b$ is a non-zero multilinear polynomial of degree $\leq l$.
+By the [Schwartz-Zippel Lemma](https://en.wikipedia.org/wiki/Schwartz%E2%80%93Zippel_lemma), the probability that $\tilde{f}_a(r)=\tilde{f}_b(r)$ for a randomly chosen $r\in \mathbb{F}^l$ is at most:
+
+$$
+\frac{\text{deg}\left(\tilde{f}_a-\tilde{f}_b\right)}{|\mathbb{F}|} \leq \frac{l}{|\mathbb{F}|}
+$$
+
+To ensure the error is $\leq 1/n$, set:
+
+$$
+\frac{l}{|\mathbb{F}|} \leq \frac{1}{n} \Rightarrow |\mathbb{F}| \geq l\cdot n = l\cdot 2^l
+$$
+
+Lastly, to compute the protocol's total communication cost in bits, recall that the number of bits needed to represent an element of $\mathbb{F}$ is
+
+$$
+\left \lceil{\text{log}_2|\mathbb{F}|}\right \rceil
+$$
+
+because that's the number of bits needed to represent integers up to $|\mathbb{F}|-1$.
+
+During the protocol, Alice sends:
+
+- The vector $r\in \mathbb{F}^l$, i.e., $l\cdot \left \lceil{\text{log}_2|\mathbb{F}|}\right \rceil$ bits.
+- The value $\tilde{f}_a(r)\in \mathbb{F}$, i.e., $\left \lceil{\text{log}_2|\mathbb{F}|}\right \rceil$ bits.
+
+Therefore, the protocol's total communication cost in bits is $(l+1)\cdot \left \lceil{\text{log}_2|\mathbb{F}|}\right \rceil$ bits.
+
+To see how efficient this is, let's consider an example.
+Suppose $n=1024=2^{10}$, i.e., $l=10$. 
+To ensure the soundness error is $\leq 1/n$, we choose $p \geq l\cdot n = 10\cdot 1024 = 10240$.
+With this choice, we have $\text{log}_2p \approx 14$.
+The total communication cost in bits is, therefore, given by:
+$$
+(10+1)\cdot 14 = 154 \text{ bits}
+$$
+Compared to naively sending the whole vector (1024 field elements = 14,336 bits), our protocol gives an exponential saving.
+
 
 ### Exercise 3.3
 
