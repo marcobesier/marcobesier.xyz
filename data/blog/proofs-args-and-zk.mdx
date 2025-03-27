@@ -61,6 +61,54 @@ How many field multiplications did you perform during the calculation?
 Can you work through the calculation of $\tilde{f}(2,4,6)$ that uses "just" 20 multipliactions operations?
 Hint: see Lemma 3.8.
 
+#### Solution
+
+Let $p = 11$. Consider the function $f:\{0,1\}^2\rightarrow\mathbb{F}_p$ given by $f(0,0)=3, f(0,1)=4, f(1,0)=1$, and $f(1,1)=2$.
+Using Lemma 3.6, we can compute $\tilde{f}$ via:
+$$
+\begin{aligned}
+\tilde{f}(x_1, x_2) &= \sum_{w\in \{0,1\}^2}f(w)\cdot \prod_{i=1}^2 (x_i w_i + (1-x_i)(1-w_i))\\
+&= 3(1-x_1)(1-x_2) + 4(1-x_1)x_2 + x_1(1-x_2) + 2x_1x_2
+\end{aligned}
+$$
+
+Consequently, we have $\tilde{f}(2,4) = 3$.
+
+Now consider the function $f: \{0,1\}^3\rightarrow \mathbb{F}_p$ given by $f(0,0,0)=1, f(0,1,0)=2, f(1,0,0)=3, f(1,1,0)=4, f(0,0,1)=5, f(0,1,1)=6, f(1,0,1)=7, f(1,1,1)=8$.
+Using Lemma 3.6, we can compute $\tilde{f}$ via
+
+$$
+\tilde{f}(x_1, x_2, x_3) = \sum_{w\in \{0,1\}^3}\tilde{f}_w(x_1,x_2,x_3)
+$$
+
+where:
+
+$$
+\begin{aligned}
+\tilde{f}_{(0,0,0)}(x_1, x_2, x_3) &= 1\cdot (1-x_1)\cdot (1-x_2)\cdot (1-x_3) \\
+\tilde{f}_{(0,1,0)}(x_1, x_2, x_3) &= 2\cdot(1-x_1)\cdot x_2\cdot(1-x_3) \\
+\tilde{f}_{(1,0,0)}(x_1, x_2, x_3) &= 3\cdot x_1\cdot (1-x_2)\cdot (1-x_3) \\
+\tilde{f}_{(1,1,0)}(x_1, x_2, x_3) &= 4\cdot x_1\cdot x_2\cdot (1-x_3) \\
+\tilde{f}_{(0,0,1)}(x_1, x_2, x_3) &= 5\cdot (1-x_1)\cdot (1-x_2)\cdot x_3 \\
+\tilde{f}_{(0,1,1)}(x_1, x_2, x_3) &= 6\cdot (1-x_1)\cdot x_2\cdot x_3 \\
+\tilde{f}_{(1,0,1)}(x_1, x_2, x_3) &= 7\cdot x_1\cdot (1-x_2)\cdot x_3 \\
+\tilde{f}_{(1,1,1)}(x_1, x_2, x_3) &= 8\cdot x_1\cdot x_2\cdot x_3 \\
+\end{aligned}
+$$
+
+Consequently, we can compute $\tilde{f}(2,4,6) = 33$ using a total of 24 multiplications.
+Using the memoization procedure from Lemma 3.8, we can reduce the number of required multiplications to 20.
+To see that, notice that each of the following four multiplications appears twice in the above expressions for the $\tilde{f}_w$.
+
+- $(1-x_1)\cdot (1-x_2)$
+- $(1-x_1)\cdot x_2$
+- $x_1\cdot (1-x_2)$
+- $x_1\cdot x_2$
+
+Therefore, it suffices to compute each of them only once instead of evaluating each instance at $(2,4,6)$ independently.
+As a result, we only need a total of $20 = 24 - 4$ multiplications to compute $\tilde{f}(2,4,6)$.
+
+
 ### Exercise 3.4
 
 Fix some prime $p$ of your choosing.
