@@ -82,5 +82,49 @@ example (A B : Prop) (hA : A) (hB : B) : A ∧ B := by
   assumption
 ```
 
+### Level 11
 
+```
+example (A B C : Prop) (h : A ∧ (B ∧ C)) : B := by
+  obtain ⟨h₁, h₂⟩ := h
+  obtain ⟨h₃, h₄⟩ := h₂
+  assumption
+```
+
+### Level 12
+
+```
+example (A B : Prop) (hA : A) : A ∨ (¬ B) := by
+  left
+  assumption
+```
+
+### Level 13
+
+```
+example (A B : Prop) (h : (A ∧ B) ∨ A) : A := by
+  obtain h | h := h
+  obtain ⟨h₁, h₂⟩ := h
+  assumption
+  assumption
+```
+
+### Level 14
+
+```
+example (A B C : Prop) (h : A ∨ (B ∧ C)) : (A ∨ B) ∧ (A ∨ C) := by
+  constructor
+  obtain h | h := h
+  left
+  assumption
+  obtain ⟨h₁, h₂⟩ := h
+  right
+  assumption
+  obtain h | h := h
+  left
+  assumption
+  obtain ⟨h₁, h₂⟩ := h
+  right
+  assumption
+```
 
