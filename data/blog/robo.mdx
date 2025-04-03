@@ -1,0 +1,77 @@
+---
+title: Solving Robo
+date: '2025-04-03'
+tags: ['interactive theorem proving', 'lean', 'mathematics']
+draft: false
+summary: In this post, I present the solutions to all levels of the Lean 4 Game Server's Robo game.
+---
+
+# This post is a work in progress.
+
+## World: Logo
+
+### Level 1
+
+```
+tauto
+```
+
+### Level 2
+
+```
+rfl
+```
+
+### Level 3
+
+```
+assumption
+```
+
+### Level 4
+
+```
+assumption
+```
+
+### Level 5
+
+```
+decide
+```
+
+### Level 6
+
+```
+decide
+```
+
+### Level 7
+
+```
+contradiction
+```
+
+### Level 8
+
+```
+contradiction
+```
+
+### Level 9
+
+```
+contradiction
+```
+
+### Level 10
+
+```lean
+example (A B : Prop) (hA : A) (hB : B) : A ∧ B := by
+  constructor
+  assumption
+  assumption
+```
+
+
+
