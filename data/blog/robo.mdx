@@ -13,60 +13,69 @@ summary: In this post, I present the solutions to all levels of the Lean 4 Game 
 ### Level 1
 
 ```
-tauto
+example (A B C : Prop) : ¬((¬B ∨ ¬ C) ∨ (A → B)) → (¬A ∨ B) ∧ ¬ (B ∧ C) := by
+  tauto
 ```
 
 ### Level 2
 
 ```
-rfl
+example : 42 = 42 := by
+  rfl
 ```
 
 ### Level 3
 
 ```
-assumption
+example (n : ℕ) (h₁ : 10 > n) (h₂ : 1 < n) (h₃ : n ≠ 5) : 1 < n := by
+  assumption
 ```
 
 ### Level 4
 
 ```
-assumption
+example (A : Prop) (hA : A) : A := by
+  assumption
 ```
 
 ### Level 5
 
 ```
-decide
+example : True := by
+  decide
 ```
 
 ### Level 6
 
 ```
-decide
+example : ¬False := by
+  decide
 ```
 
 ### Level 7
 
 ```
-contradiction
+example (A : Prop) (h : False) : A := by
+  contradiction
 ```
 
 ### Level 8
 
 ```
-contradiction
+example (n : ℕ) (h : n ≠ n) : n = 37 := by
+  contradiction
 ```
 
 ### Level 9
 
 ```
-contradiction
+example (n : ℕ) (h : n = 10) (g : n ≠ 10) : n = 42 := by
+  contradiction
 ```
 
 ### Level 10
 
-```lean
+```
 example (A B : Prop) (hA : A) (hB : B) : A ∧ B := by
   constructor
   assumption
