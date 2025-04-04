@@ -128,3 +128,53 @@ example (A B C : Prop) (h : A ∨ (B ∧ C)) : (A ∨ B) ∧ (A ∨ C) := by
   assumption
 ```
 
+## World: Implis
+
+### Level 1
+
+```
+example (A B : Prop) (hB : B) : A → (A ∧ B) := by
+  intro hA
+  constructor
+  assumption
+  assumption
+```
+
+### Level 2
+
+```
+example (A B : Prop) (hA : A) (h : A → B) : B := by
+  revert hA
+  assumption
+```
+
+### Level 3
+
+```
+example (A B : Prop) (h : A) (hAB : A → B) : B := by
+  apply hAB at h
+  assumption
+```
+
+### Level 4
+
+```
+example (A B C : Prop) (f : A → B) (g : B → C) : A → C := by
+  intro h
+  apply f at h
+  apply g at h
+  assumption
+```
+
+### Level 5
+
+```
+example (A B C D E F G H I : Prop) (f : A → B) (g : C → B) (h : A → D) (i : B → E) (j : C → F) (k : E → D) (l : E → F) (m : G → D) (n : H → E) (p : F → I) (q : H → G) (r : H → I) : A → I := by
+  intro hA
+  apply f at hA
+  apply i at hA
+  apply l at hA
+  apply p at hA
+  assumption
+```
+
