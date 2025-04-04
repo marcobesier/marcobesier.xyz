@@ -178,3 +178,99 @@ example (A B C D E F G H I : Prop) (f : A → B) (g : C → B) (h : A → D) (i 
   assumption
 ```
 
+### Level 6
+
+```
+example (A B : Prop) (mp : A → B) (mpr : B → A) : A ↔ B := by
+  constructor
+  assumption
+  assumption
+```
+
+### Level 7
+
+```
+example (A B : Prop) (h : A ↔ B) : B ↔ A := by
+  symm at h
+  assumption
+```
+
+### Level 8
+
+```
+example (A B C D : Prop) (h₁ : C ↔ D) (h₂ : A ↔ B) (h₃ : A ↔ D) : B ↔ C := by
+  rw [h₁]
+  rw [←h₂]
+  assumption
+```
+
+### Level 9
+
+```
+example (A B C D : Prop) (h₁ : C ↔ D) (h₂ : A ↔ B) (h₃ : A ↔ D) : B ↔ C := by
+  trans A
+  symm at h₂
+  assumption
+  trans D
+  assumption
+  symm at h₁
+  assumption
+```
+
+### Level 10
+
+```
+example (A B C : Prop) (h : A ↔ B) (g : B → C) : A → C := by
+  intro f
+  apply (h.mp) at f
+  apply g at f
+  assumption
+```
+
+### Level 11
+
+```
+example (A B : Prop) : (A ↔ B) → (A → B) := by
+  intro h
+  obtain ⟨mp, mpr⟩ := h
+  assumption
+```
+
+### Level 12
+
+```
+example (A : Prop) : ¬A ∨ A := by
+  by_cases h : A
+  right
+  assumption
+  left
+  assumption
+```
+
+### Level 13
+
+```
+example (A B C : Prop) : (A ∧ (¬¬C)) ∨ (¬¬B) ∧ C ↔ (A ∧ C) ∨ B ∧ (¬¬C) := by
+  rw [not_not, not_not]
+```
+
+### Level 14
+
+```
+theorem imp_iff_not_or {A B : Prop} : (A → B) ↔ ¬ A ∨ B := by
+  constructor
+  by_cases hA: A
+  intro hAB
+  apply hAB at hA
+  right
+  assumption
+  intro hAB
+  left
+  assumption
+  intro hNAB
+  intro hA
+  obtain hNAB | hNAB := hNAB
+  contradiction
+  assumption
+```
+
