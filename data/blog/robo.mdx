@@ -169,7 +169,12 @@ example (A B C : Prop) (f : A → B) (g : B → C) : A → C := by
 ### Level 5
 
 ```
-example (A B C D E F G H I : Prop) (f : A → B) (g : C → B) (h : A → D) (i : B → E) (j : C → F) (k : E → D) (l : E → F) (m : G → D) (n : H → E) (p : F → I) (q : H → G) (r : H → I) : A → I := by
+example
+    (A B C D E F G H I : Prop)
+    (f : A → B) (g : C → B) (h : A → D) (i : B → E) 
+    (j : C → F) (k : E → D) (l : E → F) (m : G → D)
+    (n : H → E) (p : F → I) (q : H → G) (r : H → I) :
+    A → I := by
   intro hA
   apply f at hA
   apply i at hA
@@ -272,5 +277,47 @@ theorem imp_iff_not_or {A B : Prop} : (A → B) ↔ ¬ A ∨ B := by
   obtain hNAB | hNAB := hNAB
   contradiction
   assumption
+```
+
+## World: Saturn
+
+### Level 1
+
+```
+example (x y : ℚ) : (x + y) ^ 2 = x ^ 2 + 2 * x * y + y ^ 2 := by
+  ring
+```
+
+### Level 2
+
+```
+example (P : MvPolynomial (Fin 2) ℚ) : (X 0) * P = P * (X 0) := by
+  ring
+```
+
+### Level 3
+
+```
+example (a b c : MvPolynomial (Fin 4) ℕ ) : a * b * c = a * (b * c) := by
+  ring
+```
+
+### Level 4
+
+```
+example (a b c d : ℝ) (h₁ : c = d) (h₂ : a = b) (h₃ : a = d) : b = c := by
+  rw [←h₂, h₁, h₃]
+```
+
+### Level 5
+
+```
+example
+    (A B : MvPolynomial (Fin 4) ℝ)
+    (hA : A = (X 0)*(X 3) - (X 1)*(X 2))
+    (hB : B = (X 0)*(X 2) + (X 1)*(X 3)) :
+    ((X 0)^2 + (X 1)^2) * ((X 2)^2 + (X 3)^2) = A^2 + B^2 := by
+  rw [hA, hB]
+  ring
 ```
 
