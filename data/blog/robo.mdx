@@ -321,3 +321,27 @@ example
   ring
 ```
 
+## World: Quantus
+
+### Level 1
+
+```
+example : Nonempty ℕ := by
+  use 42
+```
+
+### Level 2
+
+```
+example (A : Type) (h : Nonempty A) : ∃ a : A, a = a := by
+  obtain ⟨a⟩ := h
+  use a
+```
+
+### Level 3
+
+```
+example : Even 42 := by
+  decide
+```
+
