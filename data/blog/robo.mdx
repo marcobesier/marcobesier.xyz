@@ -345,3 +345,87 @@ example : Even 42 := by
   decide
 ```
 
+### Level 4
+
+```
+theorem Nat.even_square (n : ℕ) (h : Even n) : Even (n ^ 2) := by
+  unfold Even at *
+  choose s hs using h
+  let r := 2 * s^2
+  use r
+  rw [hs]
+  ring
+```
+
+### Level 5
+
+```
+example (i : ℕ) (h : Odd i): (-1 : ℤ)^i + 1 = 0 := by
+  unfold Odd at *
+  choose s hs using h
+  rw [hs]
+  rw [Odd.neg_pow]
+  ring
+  tauto
+```
+
+### Level 6
+
+```
+example (i : ℕ): (-1 : ℤ)^i + (-1 : ℤ)^(i+1) = 0 := by
+  ring
+```
+
+### Level 7
+
+```
+example : ∀ (x : ℕ), (Even x) → Odd (1 + x) := by
+  intro x
+  unfold Even
+  unfold Odd
+  intro h
+  choose s hs using h
+  use s
+  rw [hs]
+  ring
+```
+
+### Level 8
+
+```
+example {X : Type} (P : X → Prop) : ¬ (∃ x : X, P x) ↔ ∀ x : X, ¬ P x := by
+  push_neg
+  ring
+```
+
+### Level 9
+
+```
+example : ¬ ∃ (n : ℕ), ∀ (k : ℕ) , Odd (n + k) := by
+  push_neg
+  intro n
+  use n
+  rw [← even_iff_not_odd]
+  tauto
+```
+
+### Level 10
+
+```
+example
+    {People : Type}
+    [h_nonempty : Nonempty People]
+    (isDrinking : People → Prop) :
+    ∃ (x : People), isDrinking x → ∀ (y : People), isDrinking y := by
+  by_cases h : ∀ (y : People), isDrinking y
+  · obtain ⟨p⟩ := h_nonempty
+    use p
+    intro
+    assumption
+  · push_neg at h
+    obtain ⟨p, h⟩ := h
+    use p
+    intro h_false
+    contradiction
+```
+
