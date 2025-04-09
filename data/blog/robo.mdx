@@ -429,3 +429,80 @@ example
     contradiction
 ```
 
+## World: Spinoza
+
+### Level 1
+
+```
+example (A B : Prop) (h : A → ¬ B) (k : A ∧ B) : False := by
+  obtain ⟨k₁, k₂⟩ := k
+
+  have g : ¬ B := by
+    apply h at k₁
+    assumption
+
+  contradiction
+```
+
+### Level 2
+
+```
+example (A B : Prop) (h : A → ¬ B) (k₁ : A) (k₂ : B) : False := by
+  suffices g : ¬ B
+  contradiction
+  apply h at k₁
+  assumption
+```
+
+### Level 3
+
+```
+example (A B : Prop) (g : A → B) (b : ¬ B) : ¬ A := by
+  by_contra h
+  suffices k : B
+  contradiction
+  apply g at h
+  assumption
+```
+
+### Level 4
+
+```
+theorem not_imp_not (A B : Prop) : A → B ↔ (¬ B → ¬ A) := by
+  constructor
+  intro h
+  intro g
+  by_contra f
+  apply h at f
+  contradiction
+  intro h
+  intro g
+  by_contra f
+  apply h at f
+  contradiction
+```
+
+### Level 5
+
+```
+example (n : ℕ) (h : Odd (n ^ 2)): Odd n := by
+  revert h
+  contrapose
+  rw [← even_iff_not_odd]
+  rw [← even_iff_not_odd]
+  apply even_square
+```
+
+### Level 6
+
+```
+example (n : ℕ) (h : Odd (n ^ 2)) : Odd n := by
+  by_contra g
+  suffices f : ¬ Odd (n^2)
+  contradiction
+  rw [← even_iff_not_odd] at g
+  rw [← even_iff_not_odd]
+  apply even_square at g
+  assumption
+```
+
